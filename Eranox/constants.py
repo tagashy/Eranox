@@ -1,0 +1,2 @@
+VERSION="0.0.1"
+SECURE_STORAGE_MASTERTABLE_PATH=".mastertable.yml"
