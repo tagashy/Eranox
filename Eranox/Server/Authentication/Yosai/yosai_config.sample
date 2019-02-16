@@ -1,0 +1,76 @@
+---
+AUTHC_CONFIG:
+    account_lock_threshold: null
+    preferred_algorithm: argon2
+    hash_algorithms:
+        argon2: {}
+        bcrypt_sha256: {}
+        sha256_crypt:
+            default_rounds: 110000
+            max_rounds: 1000000
+            min_rounds: 1000
+            salt_size: 16
+    totp:
+        mfa_dispatcher: null
+        context:
+            secrets:
+                update_this_tag_with_unixepoch:  update_this_using_passlib.totp.generate_secret()
+
+REMEMBER_ME_CONFIG:
+    default_cipher_key: update_this_using_passlib.totp.generate_secret()
+
+SECURITY_MANAGER_CONFIG:
+    security_manager: yosai.core.NativeSecurityManager
+    attributes:
+        serializer: cbor
+        realms:
+            yosai.core.AccountStoreRealm:
+                account_store: yosai_alchemystore.AlchemyAccountStore
+                authc_verifiers: yosai.core.PasslibVerifier
+        cache_handler: yosai_dpcache.cache.DPCacheHandler
+        session_attributes: null
+
+SESSION_CONFIG:
+    session_timeout:
+        absolute_timeout: 1800
+        idle_timeout: 300
+    session_validation:
+        scheduler_enabled: false
+        time_interval: 3600
+
+WEB_REGISTRY:
+    signed_cookie_secret:  changeme
+
+CACHE_HANDLER:
+    init_config:
+        backend: 'yosai_dpcache.redis'
+        region_name: 'yosai_dpcache'
+    server_config:
+      redis:
+        url: '127.0.0.1'
+        host: 'localhost'
+        port: 6379
+        # password:
+        # db:
+        # distributed_lock:
+        # socket_timeout:
+        # lock_timeout:
+        # lock_sleep:
+        # redis_expiration_time:
+        # connection_pool:
+    ttl_config:
+        absolute_ttl: 3600
+        credentials_ttl: 300
+        authz_info_ttl: 1800
+        session_absolute_ttl: 1800
+
+ALCHEMY_STORE:
+    engine_config:
+        dialect:
+        path:
+        userid:
+        password:
+        hostname:
+        port:
+        db:
+

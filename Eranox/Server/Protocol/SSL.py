@@ -36,8 +36,11 @@ class TcpClient(Client):
         self.waiting_reply_queue = Queue()
         self.unknown_packet_queue = Queue()
 
-    def main(self):
+    def init(self):
         pass
+
+    def main(self):
+         pass
 
 
 

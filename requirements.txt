@@ -1,2 +1,6 @@
 pycrypto
 ruamel.yaml
+yosai
+yosai_dpcache
+yosai_alchemystore
+SQLAlchemy
