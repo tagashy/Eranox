@@ -8,3 +8,7 @@ context.check_hostname=False
 with socket.create_connection((hostname, 8443)) as sock:
     with context.wrap_socket(sock, server_hostname=hostname,) as ssock:
         print(ssock.version())
+        print(ssock.read())
+        print(ssock.read())
+        print(ssock.send('{"username":"test","password":"test"}'.encode("utf-8")))
+        print(ssock.read())

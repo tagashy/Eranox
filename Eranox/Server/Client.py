@@ -1,7 +1,7 @@
 from enum import Enum
 
-from Eranox.Server.Authentication.Authenticator import Authenticator
 from Eranox.Server.mythread import Thread
+from EranoxAuth import AuthenticationError, Authenticator
 
 
 class ClientRole(Enum):
@@ -18,19 +18,20 @@ class AuthenticationState(Enum):
 
 
 class Client(Thread):
-    def __init__(self, hostname, ip, authenticator: Authenticator):
+    def __init__(self, authenticator: Authenticator):
         Thread.__init__(self)
-        self.role = ClientRole.UNKNOWN
+        self.user = None
         self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
-        self.hostname = hostname
-        self.ip = ip
         self.authenticator = authenticator
 
-    def authenticate(self, key):
-        if self.authenticator.authenticate_user(self.hostname, key):
+    def authenticate(self, username: str, key: str):
+        try:
+            self.user = self.authenticator.authenticate_user(username, key)
             self.authentication_state = AuthenticationState.AUTHENTICATED
-        else:
+            return True
+        except AuthenticationError:
             self.authentication_state = AuthenticationState.FAILURE
+            return False
 
     def execute_order(self, order):
         raise NotImplementedError
