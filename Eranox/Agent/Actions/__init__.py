@@ -1,4 +1,4 @@
-import sys
+"""import sys
 import traceback
 from importlib import reload
 
@@ -34,6 +34,6 @@ def investigation_core(context):
                 traceback.print_exception(exc_type, exc_value, exc_traceback)
 
 
-
+"""
 
 

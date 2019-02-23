@@ -1,5 +1,6 @@
 from logging import basicConfig, DEBUG
 
+from Eranox.Server.Command import CommandMessage, Command
 from Eranox.Server.Protocol.SSL import SocketServer
 from EranoxAuth import Authenticator, Role, DefaultEngine
 
@@ -15,6 +16,11 @@ if __name__ == '__main__':
                       private_key_path="Eranox/Server/data/privatekey.key", authenticator=auth)
     ss.start()
     import time
+
+    time.sleep(10)
+    ss.clients[0].send_queue.put(CommandMessage(Command("ping")))
+    ss.clients[0].send_queue.put(CommandMessage(Command("pyeval 1+1")))
+    ss.clients[0].send_queue.put(CommandMessage(Command("ping")))
 
     time.sleep(200)
 

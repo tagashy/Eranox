@@ -1,6 +1,6 @@
 from enum import Enum
 
-from Eranox.Server.mythread import Thread
+from Eranox.Core.mythread import Thread
 from EranoxAuth import AuthenticationError, Authenticator
 
 

@@ -1,6 +1,6 @@
 from queue import Empty
 
-from Eranox.Server.mythread import Thread
+from Eranox.Core.mythread import Thread
 
 
 class Server(Thread):
