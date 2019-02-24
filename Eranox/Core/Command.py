@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from Eranox.Server.Message import Message
+from Eranox.Core.Message import Message
 from Eranox.constants import StatusCode
 
 

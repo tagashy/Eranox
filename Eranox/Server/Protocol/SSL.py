@@ -7,10 +7,10 @@ from json import JSONDecodeError
 from logging import debug, warning, error
 from queue import Queue, Empty
 
+from Eranox.Core.Command import CommandFactory, CommandReplyMessage
+from Eranox.Core.Message import Message
 from Eranox.Core.mythread import Thread
 from Eranox.Server.Client import Client, AuthenticationState
-from Eranox.Server.Command import CommandFactory, CommandReplyMessage
-from Eranox.Server.Message import Message
 from Eranox.constants import STATUS_CODE, StatusCode, MESSAGE, ERRORS, LOGIN
 from EranoxAuth import Authenticator
 
@@ -171,3 +171,13 @@ class TcpClient(Client):
         else:
             data = self.read()
         message = Message(data)
+
+    def write(self, s: (dict, str)):
+        if isinstance(s, Message):
+            s = s.to_dict()
+        try:
+            debug(f"write: {s}")
+            res = json.dumps(s)
+            self.send_queue.put(res.encode("utf-8"))
+        except json.JSONDecodeError:
+            error(f"data to send are could not been dumped : {s}")

@@ -6,13 +6,13 @@ from queue import Empty, Queue
 
 from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Core.mythread import Thread
-from Eranox.Server.Message import Message
+from Eranox.Core.Message import Message
 
 
 class SSLController(Controller, Thread):
     def __init__(self, hostname: str, port: int, certificate_path: str, username: str, password: str,
-                 check_hostname: bool = True):
-        Controller.__init__(self, username, password)
+                 server_hash: str = None, check_hostname: bool = True):
+        Controller.__init__(self, username, password, server_hash)
         Thread.__init__(self)
         self.hostname = hostname
         self.port = port

@@ -1,12 +1,13 @@
 import json
-from logging import debug
+from logging import debug, error
 
 from ruamel.yaml import YAML
 
 from Eranox.Agent.Actions.commands import init_cmds
 from Eranox.Agent.Connections.SSLSocket import SSLController, Controller
-from Eranox.Server.Command import CommandMessage
-from Eranox.Server.Message import Message
+from Eranox.Core.Command import CommandMessage
+from Eranox.Core.Command import CommandReplyMessage, CommandFactory
+from Eranox.Core.Message import Message
 from Eranox.constants import StatusCode
 
 yaml = YAML(typ="safe")
@@ -17,8 +18,11 @@ def Core(args):
     data = yaml.load(open(config_file))
     password = data.get("password")
     username = data.get("username")
+    server_hash = data.get("server_hash")
     cert_path = data.get("cert_path")
-    ssl = SSLController('127.0.0.1', 8443, cert_path, username, password, False)
+    server_addr = data.get("server_addr", '127.0.0.1')
+    port = data.get("port", 8443)
+    ssl = SSLController(server_addr, port, cert_path, username, password, server_hash, check_hostname=False)
     ssl.start()
     parser = init_cmds()
     while True:
@@ -42,6 +46,13 @@ def process_message(message: str, parser, controller: Controller):
             msg = CommandMessage.from_message(msg)
             args = parser.parse_args(msg.message.get("command").split())
             args.func(args, msg, controller)
+        elif msg.status_code == StatusCode.COMMAND_REPLY.value:
+            msg = CommandReplyMessage.from_message(msg)
+            try:
+                CommandFactory.mapping[msg.uuid](msg)
+                del CommandFactory.mapping[msg.uuid]
+            except Exception as e:
+                error(e)
     except json.JSONDecodeError:
         pass
 

@@ -1,4 +1,5 @@
-from Eranox.constants import STATUS_CODE, StatusCode, MESSAGE, ERRORS
+from Eranox.constants import STATUS_CODE, MESSAGE, ERRORS
+from Eranox.constants import StatusCode
 
 
 class Message(object):
@@ -6,11 +7,11 @@ class Message(object):
                  errors: list = None):
         if isinstance(data, dict):
             self.status_code = data.get(STATUS_CODE)
-            self.message = data.get(MESSAGE)
+            self.message: dict = data.get(MESSAGE)
             self.errors = data.get(ERRORS)
         elif status_code is not None and message is not None and errors is not None:
             self.status_code = status_code
-            self.message = message
+            self.message: dict = message
             self.errors = errors
         else:
             raise TypeError(data.__class__)
@@ -24,6 +25,5 @@ class Message(object):
 
     def to_dict(self):
         return {STATUS_CODE: self.status_code, MESSAGE: self.message, ERRORS: self.errors}
-
 
 

@@ -7,7 +7,7 @@ from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
 
 
-def init_cmds():
+def init_cmds(user,authenticator):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help="investigation commands", dest="command")
     Login().add_to_parser(subparsers)

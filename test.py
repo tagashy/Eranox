@@ -1,6 +1,6 @@
 from logging import basicConfig, DEBUG
 
-from Eranox.Server.Command import CommandMessage, Command
+from Eranox.Core.Command import CommandMessage, Command
 from Eranox.Server.Protocol.SSL import SocketServer
 from EranoxAuth import Authenticator, Role, DefaultEngine
 

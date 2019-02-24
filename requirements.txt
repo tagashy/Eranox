@@ -2,3 +2,4 @@ pycrypto
 ruamel.yaml
 SQLAlchemy
 psutil
+pycrypto
