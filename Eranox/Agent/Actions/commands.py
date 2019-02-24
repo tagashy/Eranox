@@ -9,7 +9,7 @@ from Eranox.Core.Command import CommandMessage, CommandReplyMessage
 
 def init_cmds():
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help="investigation commands", dest="command")
+    subparsers = parser.add_subparsers(help="commands", dest="command")
     Login().add_to_parser(subparsers)
     Pyexec().add_to_parser(subparsers)
     Pyeval().add_to_parser(subparsers)

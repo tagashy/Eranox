@@ -7,9 +7,9 @@ from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
 
 
-def init_cmds(user,authenticator):
+def init_cmds(user, authenticator):
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help="investigation commands", dest="command")
+    subparsers = parser.add_subparsers(help="commands", dest="command")
     Login().add_to_parser(subparsers)
     Pyexec().add_to_parser(subparsers)
     Pyeval().add_to_parser(subparsers)
@@ -38,6 +38,8 @@ class Action(object):
 
 
 class Login(Action):
+    permissions = ["root"]
+
     subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
 
     def run(self, args, message: CommandMessage, controller: Controller):
@@ -46,6 +48,7 @@ class Login(Action):
 
 class Pyexec(Action):
     subparser_data = {"args": ["pyexec"], "kwargs": {"help": "execute a python statement"}}
+    permissions = ["pyexec", "root"]
 
     def run(self, args, message: CommandMessage, controller: Controller):
         """
@@ -70,6 +73,7 @@ class Pyeval(Action):
     arguments = [
         {"args": ["statement"], "kwargs": {"help": "the statement to execute", "nargs": "+"}}
     ]
+    permissions = ["pyeval", "root"]
 
     def run(self, args, message: CommandMessage, controller: Controller):
         """
@@ -91,6 +95,7 @@ class Pyeval(Action):
 
 class Stop(Action):
     subparser_data = {"args": ["stop"], "kwargs": {"help": "stop cleanly the program"}}
+    permissions = ["stop", "root"]
 
     def run(self, args, message: CommandMessage, controller: Controller):
         """
@@ -105,6 +110,7 @@ class Stop(Action):
 
 class Ping(Action):
     subparser_data = {"args": ["ping"], "kwargs": {"help": "reply pong"}}
+    permissions = ["ping"]
 
     def run(self, args, message: CommandMessage, controller: Controller):
         """
@@ -125,6 +131,7 @@ class Ping(Action):
 
 class Monitor(Action):
     subparser_data = {"args": ["monitor"], "kwargs": {"help": "return systems information"}}
+    permissions = ["ping"]
 
     def run(self, args, message: CommandMessage, controller: Controller):
         """
@@ -145,3 +152,38 @@ class Monitor(Action):
             errors = [str(e)]
         msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
         controller.write(msg)
+
+
+class Register(Action):
+    subparser_data = {"args": ["REGISTER"], "kwargs": {"help": "register a new account"}}
+    arguments = [{"args": ["-u", "--user"], "kwargs": {"help": "the username", "required": True}},
+                 {"args": ["-p", "--password"], "kwargs": {"help": "the password", "required": True}}]
+    permissions = ["register"]
+
+    def run(self, args, message: CommandMessage, controller: Controller):
+        """
+        return systems information
+        :param args: the args object returned by parse_args (unused)
+        :param controller: the controller object who called the function
+        :return: nothing
+        """
+        errors = []
+        try:
+            user = controller.authenticator.create_user(args.user, args.password)
+            res = user.get("server_hash")
+        except Exception as e:
+            errors.append(e)
+        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
+
+
+Actions = [Login, Pyexec, Pyeval, Stop, Ping, Monitor, Register]
+
+
+def get_parser_for_user(user, authenticator):
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(help="commands", dest="command")
+    for action in Actions:
+        for permission in action.permissions:
+            if authenticator.can_user_do(permission, user):
+                action().add_to_parser(subparsers)
+    return parser

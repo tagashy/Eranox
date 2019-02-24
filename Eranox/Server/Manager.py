@@ -1,8 +1,9 @@
 from queue import Empty
 
-from Eranox.Core.Command import CommandFactory
 from Eranox.Core import process_message
+from Eranox.Core.Command import CommandFactory
 from Eranox.Core.mythread import Thread
+from Eranox.Server.Actions.commands import get_parser_for_user
 from Eranox.Server.Protocol.SSL import SocketServer
 from EranoxAuth import Authenticator, Engine, DefaultEngine, DEFAULT_ENGINE_PATH, Role
 
@@ -27,7 +28,7 @@ class Manager(Thread):
     def main(self):
         new_client = []
         for client in self.socket_server.clients:
-            parser = get_parser_for_client(client)
+            parser = get_parser_for_user(client.user, self.authenticator)
             try:
                 message = client.rcv_queue.get_nowait()
                 process_message(message, parser, client)
@@ -48,8 +49,18 @@ if __name__ == '__main__':
     taga = manager.authenticator.create_user("tagashy", "123456", Role.ROOT)
     admin = manager.authenticator.create_user("admin", "admin", Role.ADMIN)
     test = manager.authenticator.create_user("test", "test", Role.USER)
-    admin_grp = manager.authenticator.create_group("admin")
+    admin_grp = manager.authenticator.create_group("root")
+    users_grp = manager.authenticator.create_group("users")
     manager.authenticator.add_user_to_group(user=admin, group=admin_grp)
+    manager.authenticator.add_user_to_group(user=anon, group=users_grp)
+    manager.authenticator.add_user_to_group(user=taga, group=users_grp)
+    manager.authenticator.add_user_to_group(user=admin, group=users_grp)
+    manager.authenticator.add_user_to_group(user=test, group=users_grp)
+    manager.authenticator.create_permission("register", group=users_grp)
+    manager.authenticator.create_permission("root", group=admin_grp)
+    parser = get_parser_for_user(admin, manager.authenticator)
+    parser = get_parser_for_user(test, manager.authenticator)
+
     print(f"groups of user {anon}:{manager.authenticator.get_groups_of_user(anon)}")
     print(f"groups of user {taga}:{manager.authenticator.get_groups_of_user(taga)}")
     print(f"groups of user {admin}:{manager.authenticator.get_groups_of_user(admin)}")
