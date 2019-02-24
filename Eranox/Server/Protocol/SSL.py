@@ -2,16 +2,19 @@ import json
 import re
 import socket
 import ssl
+from datetime import datetime
 from json import JSONDecodeError
-from logging import debug, warning
+from logging import debug, warning, error
 from queue import Queue, Empty
 
 from Eranox.Core.mythread import Thread
 from Eranox.Server.Client import Client, AuthenticationState
-from Eranox.Server.Command import CommandFactory
+from Eranox.Server.Command import CommandFactory, CommandReplyMessage
 from Eranox.Server.Message import Message
-from Eranox.constants import STATUS_CODE, StatusCode, MESSAGE, ERRORS,LOGIN
+from Eranox.constants import STATUS_CODE, StatusCode, MESSAGE, ERRORS, LOGIN
 from EranoxAuth import Authenticator
+
+MAX_RETRY = 200
 
 
 class SocketServer(Thread):
@@ -55,22 +58,12 @@ class TcpClient(Client):
         self.waiting_reply_queue = Queue()
         self.unknown_packet_queue = Queue()
         self.banner_flag = banner_flag
+        self.request_login_date = None
 
     def init(self):
         self.__send(self.banner_flag)
 
     def main(self):
-        if self.authentication_state == AuthenticationState.NOT_AUTHENTICATED:
-            self.login()
-        elif self.authentication_state == AuthenticationState.FAILURE:
-            self.stop()
-            return
-        elif self.authentication_state == AuthenticationState.AUTHENTICATED:
-            self.authenticated_main()
-        else:
-            raise NotImplementedError()
-
-    def authenticated_main(self):
         try:
             data = self.send_queue.get_nowait()
             if isinstance(data, Message):
@@ -84,38 +77,56 @@ class TcpClient(Client):
                 data = self.read_no_wait()
                 if len(data) > 0:
                     self.rcv_queue.put(data)
-            except ssl.SSLWantReadError:
+            except ssl.SSLWantReadError as e:
                 pass
+            except ssl.SSLError as e:
+                error(e)
+            except socket.error as e:
+                self.stop()
+                error(e)
+        if self.authentication_state == AuthenticationState.NOT_AUTHENTICATED:
+            self.login()
+        elif self.authentication_state == AuthenticationState.WAITING_REPLY:
+            if (datetime.now() - self.request_login_date).total_seconds() < 2 * 60:
+                pass
+            else:
+                self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
+        elif self.authentication_state == AuthenticationState.FAILURE:
+            self.stop()
+            return
+        elif self.authentication_state == AuthenticationState.AUTHENTICATED:
+            return
+            self.authenticated_main()
+        else:
+            raise NotImplementedError()
 
     def end(self):
         self.connection.close()
 
+    def stop(self):
+        Thread.stop(self)
+        self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
+
     def login(self):
-        msg = CommandFactory.create_command(LOGIN)
-        self.send(**msg.to_dict())
-        try:
-            res = json.loads(self.read())
-            if isinstance(res, str):
-                res = json.loads(res)
-        except JSONDecodeError:
-            self.authentication_state = AuthenticationState.FAILURE
-            self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid format"])
-            return
+        msg = CommandFactory.create_command(LOGIN, self.login_stage2)
+        self.send_queue.put(msg)
+        self.request_login_date = datetime.now()
+        self.authentication_state = AuthenticationState.WAITING_REPLY
 
-        if res is None or "username" not in res or "password" not in res:
-            self.authentication_state = AuthenticationState.FAILURE
-            self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid format"])
-
-            return
+    def login_stage2(self, message: CommandReplyMessage):
+        if len(message.errors) == 0:
+            data = message.message.get("result")
+            if data is None or "username" not in data or "password" not in data:
+                self.authentication_state = AuthenticationState.FAILURE
+                self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid format"])
+            elif self.authenticate(data.get("username"), data.get("password")):
+                self.send(StatusCode.AUTHENTICATION_SUCCESS, "Authentication Success", errors=[])
+                return
+                self.commands = get_commands_for_user(self.user)
+            else:
+                self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid Credentials"])
         else:
-            username = res.get("username")
-            password = res.get("password")
-        if self.authenticate(username, password):
-            self.send(StatusCode.AUTHENTICATION_SUCCESS, "Authentication Success", errors=[])
-            return
-            self.commands = get_commands_for_user(self.user)
-        else:
-            self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid Credentials"])
+            error(message.errors)
 
     def send(self, status_code: StatusCode, message, errors: list = []):
         status_code = status_code.value if isinstance(status_code, StatusCode) else status_code
@@ -123,13 +134,22 @@ class TcpClient(Client):
         debug(f"send: {data}")
         self.__send(data)
 
-    def __send(self, message: (dict, str)):
+    def __send(self, message: (dict, str), counter: int = 0):
         try:
             self.connection.send(json.dumps(message).encode("utf-8"))
         except JSONDecodeError:
             warning(f"send message cannot be dumped !!! class= {message.__class__}")
             if isinstance(message, str):
                 self.connection.send(message.encode("utf-8"))
+        except ssl.SSLWantWriteError:
+            if counter < MAX_RETRY:
+                self.__send(message, counter + 1)
+            else:
+                error(f"cannot send {message} because max retry on ssl.WantWrite")
+        except ConnectionError:
+            self.stop()
+        except OSError:
+            self.stop()
 
     def read(self):
         data = None
@@ -144,3 +164,10 @@ class TcpClient(Client):
         data = self.connection.read().decode("utf-8")
         debug(f"read: {data}")
         return data
+
+    def read_message(self, no_wait: bool = False):
+        if no_wait:
+            data = self.read_no_wait()
+        else:
+            data = self.read()
+        message = Message(data)

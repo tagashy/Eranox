@@ -13,8 +13,9 @@ class ClientRole(Enum):
 
 class AuthenticationState(Enum):
     NOT_AUTHENTICATED = 0
-    FAILURE = 1
-    AUTHENTICATED = 2
+    WAITING_REPLY = 1
+    FAILURE = 2
+    AUTHENTICATED = 3
 
 
 class Client(Thread):

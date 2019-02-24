@@ -1,6 +1,8 @@
 import argparse
 import keyword
 
+import psutil
+
 from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Server.Command import CommandMessage, CommandReplyMessage
 
@@ -13,6 +15,7 @@ def init_cmds():
     Pyeval().add_to_parser(subparsers)
     Stop().add_to_parser(subparsers)
     Ping().add_to_parser(subparsers)
+    Monitor().add_to_parser(subparsers)
     return parser
 
 
@@ -38,7 +41,7 @@ class Login(Action):
     subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
 
     def run(self, args, message: CommandMessage, controller: Controller):
-        controller.login()
+        controller.login(message.message.get("uuid"))
 
 
 class Pyexec(Action):
@@ -116,5 +119,29 @@ class Ping(Action):
             res = "PONG"
         except Exception as e:
             errors = [e]
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        controller.write(msg)
+
+
+class Monitor(Action):
+    subparser_data = {"args": ["monitor"], "kwargs": {"help": "return systems information"}}
+
+    def run(self, args, message: CommandMessage, controller: Controller):
+        """
+        return systems information
+        :param args: the args object returned by parse_args (unused)
+        :param controller: the controller object who called the function
+        :return: nothing
+        """
+        res = {}
+        errors = []
+        try:
+            res["cpu_logical"] = psutil.cpu_count()
+            res["cpu_physical"] = psutil.cpu_count(False)
+            res["cpu_freq"] = psutil.cpu_freq()
+            res["cpu_percent"] = psutil.cpu_percent()
+            res["virtual_memory"] = str(dict(psutil.virtual_memory()))
+        except Exception as e:
+            errors = [str(e)]
         msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
         controller.write(msg)

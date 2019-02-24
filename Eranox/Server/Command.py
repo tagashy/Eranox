@@ -35,8 +35,18 @@ class CommandReplyMessage(Message):
         Message.__init__(self, status_code=StatusCode.COMMAND_REPLY, message={"uuid": uuid, "result": result},
                          errors=errors)
 
+    @staticmethod
+    def from_message(message: Message) -> Message:
+        msg = CommandReplyMessage(message.message.get("uuid"), message.message.get("result"), message.errors)
+        msg.message["uuid"] = message.message.get("uuid")
+        return msg
 
-def NoneFunc():
+    @property
+    def uuid(self):
+        return self.message.get("uuid")
+
+
+def NoneFunc(message):
     pass
 
 
@@ -46,5 +56,5 @@ class CommandFactory():
     @staticmethod
     def create_command(command: str, return_func=NoneFunc):
         msg = CommandMessage(command)
-        CommandFactory.mapping[msg.uuid] = return_func
+        CommandFactory.mapping[str(msg.uuid)] = return_func
         return msg
