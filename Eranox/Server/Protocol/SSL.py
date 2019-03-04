@@ -114,6 +114,8 @@ class TcpClient(Client):
         self.authentication_state = AuthenticationState.WAITING_REPLY
 
     def login_stage2(self, message: CommandReplyMessage):
+        username = message.message.get("username")
+
         if len(message.errors) == 0:
             data = message.message.get("result")
             if data is None or "username" not in data or "password" not in data:

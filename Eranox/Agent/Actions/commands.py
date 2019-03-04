@@ -39,10 +39,18 @@ class Action(object):
 
 class Login(Action):
     subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
-
     def run(self, args, message: CommandMessage, controller: Controller):
         controller.login(message.message.get("uuid"))
 
+class Login2(Action):
+    subparser_data = {"args": ["LOGIN2"], "kwargs": {"help": "login the client"}}
+    def run(self, args, message: CommandMessage, controller: Controller):
+        controller.login_stage2(message.message)
+
+class Login3(Action):
+    subparser_data = {"args": ["LOGIN3"], "kwargs": {"help": "login the client"}}
+    def run(self, args, message: CommandMessage, controller: Controller):
+        controller.login_stage3(message.message)
 
 class Pyexec(Action):
     subparser_data = {"args": ["pyexec"], "kwargs": {"help": "execute a python statement"}}

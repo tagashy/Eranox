@@ -28,10 +28,9 @@ class Manager(Thread):
     def main(self):
         new_client = []
         for client in self.socket_server.clients:
-            parser = get_parser_for_user(client.user, self.authenticator)
             try:
                 message = client.rcv_queue.get_nowait()
-                process_message(message, parser, client)
+                process_message(message, self.authenticator, client)
             except Empty:
                 command = CommandFactory.create_command("monitor", print_message)
                 client.send(**command.to_dict())

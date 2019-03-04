@@ -3,7 +3,6 @@ import keyword
 
 import psutil
 
-from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
 
 
@@ -26,7 +25,7 @@ class Action(object):
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         controller.write("Catching empty run")
 
     def add_to_parser(self, subparsers):
@@ -42,7 +41,7 @@ class Login(Action):
 
     subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         controller.login(message.message.get("uuid"))
 
 
@@ -50,7 +49,7 @@ class Pyexec(Action):
     subparser_data = {"args": ["pyexec"], "kwargs": {"help": "execute a python statement"}}
     permissions = ["pyexec", "root"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         do the exec func of python (allow to exec code from stdin)
         :param args: the args object returned by parse_args
@@ -75,7 +74,7 @@ class Pyeval(Action):
     ]
     permissions = ["pyeval", "root"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         do the exec func of python (allow to exec code from stdin)
         :param args: the args object returned by parse_args
@@ -97,7 +96,7 @@ class Stop(Action):
     subparser_data = {"args": ["stop"], "kwargs": {"help": "stop cleanly the program"}}
     permissions = ["stop", "root"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         exit investigation mode
         :param args: the args object returned by parse_args (unused)
@@ -112,7 +111,7 @@ class Ping(Action):
     subparser_data = {"args": ["ping"], "kwargs": {"help": "reply pong"}}
     permissions = ["ping"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         return PONG
         :param args: the args object returned by parse_args (unused)
@@ -133,7 +132,7 @@ class Monitor(Action):
     subparser_data = {"args": ["monitor"], "kwargs": {"help": "return systems information"}}
     permissions = ["ping"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         return systems information
         :param args: the args object returned by parse_args (unused)
@@ -160,7 +159,7 @@ class Register(Action):
                  {"args": ["-p", "--password"], "kwargs": {"help": "the password", "required": True}}]
     permissions = ["register"]
 
-    def run(self, args, message: CommandMessage, controller: Controller):
+    def run(self, args, message: CommandMessage, controller):
         """
         return systems information
         :param args: the args object returned by parse_args (unused)

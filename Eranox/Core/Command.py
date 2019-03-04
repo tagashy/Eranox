@@ -50,11 +50,11 @@ def NoneFunc(message):
     pass
 
 
-class CommandFactory():
+class CommandFactory(object):
     mapping = {}
 
     @staticmethod
-    def create_command(command: str, return_func=NoneFunc):
+    def create_command(command: str, return_func=NoneFunc, uuid: str = None):
         msg = CommandMessage(command)
-        CommandFactory.mapping[str(msg.uuid)] = return_func
+        CommandFactory.mapping[str(msg.uuid) if uuid is None else uuid] = return_func
         return msg
