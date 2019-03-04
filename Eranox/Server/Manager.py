@@ -4,7 +4,7 @@ from Eranox.Core import process_message
 from Eranox.Core.Command import CommandFactory
 from Eranox.Core.mythread import Thread
 from Eranox.Server.Actions.commands import get_parser_for_user
-from Eranox.Server.Protocol.SSL import SocketServer
+from Eranox.Server.Protocol.SSL import SocketServer,AuthenticationState
 from EranoxAuth import Authenticator, Engine, DefaultEngine, DEFAULT_ENGINE_PATH, Role
 
 
@@ -28,14 +28,15 @@ class Manager(Thread):
     def main(self):
         new_client = []
         for client in self.socket_server.clients:
-            try:
-                message = client.rcv_queue.get_nowait()
-                process_message(message, self.authenticator, client)
-            except Empty:
-                command = CommandFactory.create_command("monitor", print_message)
-                client.send(**command.to_dict())
-                command = CommandFactory.create_command("ping")
-                client.send(**command.to_dict())
+            if client.authentication_state== AuthenticationState.AUTHENTICATED:
+                try:
+                    message = client.rcv_queue.get_nowait()
+                    process_message(message, self.authenticator, client)
+                except Empty:
+                    command = CommandFactory.create_command("monitor", print_message)
+                    client.send(**command.to_dict())
+                    command = CommandFactory.create_command("ping")
+                    client.send(**command.to_dict())
 
 
 def print_message(msg):

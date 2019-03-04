@@ -75,8 +75,4 @@ if __name__ == '__main__':
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations('../../Server/data/certificate.crt')
     context.check_hostname = False
-    print(ssock.version())
-    print(ssock.read())
-    print(ssock.read())
-    print(ssock.send('{"username":"test","password":"test"}'.encode("utf-8")))
-    print(ssock.read())
+

@@ -9,7 +9,6 @@ from Eranox.Core.Command import CommandMessage, CommandReplyMessage
 def init_cmds(user, authenticator):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help="commands", dest="command")
-    Login().add_to_parser(subparsers)
     Pyexec().add_to_parser(subparsers)
     Pyeval().add_to_parser(subparsers)
     Stop().add_to_parser(subparsers)
@@ -35,14 +34,6 @@ class Action(object):
         n_parser.set_defaults(func=self)
         keyword.kwlist.append(self.subparser_data["args"][0])
 
-
-class Login(Action):
-    permissions = ["root"]
-
-    subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
-
-    def run(self, args, message: CommandMessage, controller):
-        controller.login(message.message.get("uuid"))
 
 
 class Pyexec(Action):
@@ -175,7 +166,7 @@ class Register(Action):
         controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
 
 
-Actions = [Login, Pyexec, Pyeval, Stop, Ping, Monitor, Register]
+Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register]
 
 
 def get_parser_for_user(user, authenticator):

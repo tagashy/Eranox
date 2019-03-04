@@ -6,15 +6,34 @@ from datetime import datetime
 from json import JSONDecodeError
 from logging import debug, warning, error
 from queue import Queue, Empty
+from typing import Union, List
 
-from Eranox.Core.Command import CommandFactory, CommandReplyMessage
+from Eranox.Core.AuthenticationProtocol import AuthenticationProtocol, DEFAULT_PROTOCOL
+from Eranox.Core.Command import CommandMessage
 from Eranox.Core.Message import Message
 from Eranox.Core.mythread import Thread
 from Eranox.Server.Client import Client, AuthenticationState
 from Eranox.constants import STATUS_CODE, StatusCode, MESSAGE, ERRORS, LOGIN
-from EranoxAuth import Authenticator
+from EranoxAuth import Authenticator, AuthenticationError
 
 MAX_RETRY = 200
+AUTHENTICATION_SESSION_KEEP_ALIVE_SECONDS = 2 * 60
+
+
+def has_parameter(parameter: Union[str, List[str]], kwargs: dict):
+    if isinstance(parameter, str):
+        if parameter in kwargs:
+            return True
+        else:
+            return False
+    elif isinstance(parameter, list):
+        for param in parameter:
+            if not has_parameter(param, kwargs):
+                return False
+        else:
+            return True
+    else:
+        raise NotImplementedError()
 
 
 class SocketServer(Thread):
@@ -47,7 +66,7 @@ class TcpClient(Client):
         "{\s*[\"\']username[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*,\s*[\"\']password[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*}")
 
     def __init__(self, hostname, ip, connection: socket.socket, authenticator: Authenticator,
-                 banner_flag: str = "Welcome to Eranox server"):
+                 banner_flag: str = "Welcome to Eranox server", protocol: AuthenticationProtocol = DEFAULT_PROTOCOL):
         Client.__init__(self, authenticator)
         self.hostname = hostname
         self.ip = ip
@@ -59,11 +78,29 @@ class TcpClient(Client):
         self.unknown_packet_queue = Queue()
         self.banner_flag = banner_flag
         self.request_login_date = None
+        self.protocol = protocol
 
     def init(self):
         self.__send(self.banner_flag)
 
     def main(self):
+
+        if self.authentication_state == AuthenticationState.AUTHENTICATED:
+            self.authenticated_main()
+        elif self.authentication_state == AuthenticationState.FAILURE:
+            self.stop()
+            return
+        elif self.authentication_state == AuthenticationState.NOT_AUTHENTICATED:
+            self.login()
+        elif self.authentication_state == AuthenticationState.PROCESSING_AUTHENTICATION:
+            if (datetime.now() - self.request_login_date).total_seconds() < AUTHENTICATION_SESSION_KEEP_ALIVE_SECONDS:
+                self.authenticate()
+            else:
+                self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
+        else:
+            raise NotImplementedError()
+
+    def authenticated_main(self):
         try:
             data = self.send_queue.get_nowait()
             if isinstance(data, Message):
@@ -84,21 +121,6 @@ class TcpClient(Client):
             except socket.error as e:
                 self.stop()
                 error(e)
-        if self.authentication_state == AuthenticationState.NOT_AUTHENTICATED:
-            self.login()
-        elif self.authentication_state == AuthenticationState.WAITING_REPLY:
-            if (datetime.now() - self.request_login_date).total_seconds() < 2 * 60:
-                pass
-            else:
-                self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
-        elif self.authentication_state == AuthenticationState.FAILURE:
-            self.stop()
-            return
-        elif self.authentication_state == AuthenticationState.AUTHENTICATED:
-            return
-            self.authenticated_main()
-        else:
-            raise NotImplementedError()
 
     def end(self):
         self.connection.close()
@@ -107,28 +129,71 @@ class TcpClient(Client):
         Thread.stop(self)
         self.authentication_state = AuthenticationState.NOT_AUTHENTICATED
 
-    def login(self):
-        msg = CommandFactory.create_command(LOGIN, self.login_stage2)
-        self.send_queue.put(msg)
-        self.request_login_date = datetime.now()
-        self.authentication_state = AuthenticationState.WAITING_REPLY
+    def authenticate(self):
+        if self.protocol == AuthenticationProtocol.PASSWORD or self.protocol == AuthenticationProtocol.SHARED_KEY_PASSWORD:
+            self.handle_auth_user_key()
+        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE:
+            self.handle_auth_challenge()
 
-    def login_stage2(self, message: CommandReplyMessage):
-        username = message.message.get("username")
-
-        if len(message.errors) == 0:
-            data = message.message.get("result")
-            if data is None or "username" not in data or "password" not in data:
-                self.authentication_state = AuthenticationState.FAILURE
-                self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid format"])
-            elif self.authenticate(data.get("username"), data.get("password")):
-                self.send(StatusCode.AUTHENTICATION_SUCCESS, "Authentication Success", errors=[])
-                return
-                self.commands = get_commands_for_user(self.user)
+    def handle_auth_challenge(self):
+        msg = self.read()
+        if len(msg.errors) == 0:
+            datas = msg.message
+            if isinstance(datas, dict) and has_parameter(["username", "challenge"], datas):
+                try:
+                    username = datas.get("username")
+                    msg, key = self.authenticator.authenticate_challenge(stage=1, username=username,
+                                                                         challenge=datas.get("challenge"))
+                    self.send(StatusCode.AUTHENTICATION_CHALLENGE_STEP_2, msg)
+                    msg = self.read()
+                    datas = msg.message
+                    if isinstance(datas, dict) and has_parameter(["challenge"], datas):
+                        self.authenticator.authenticate_challenge(stage=3, username=username,
+                                                                  challenge=datas.get("challenge"), key=key,
+                                                                  crypted_password=True if AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False)
+                    else:
+                        self.send(**Message(status_code=StatusCode.AUTHENTICATION_ERROR, message="",
+                                            errors=["invalid format"]).to_dict())
+                except AuthenticationError:
+                    self.send(**Message(status_code=StatusCode.AUTHENTICATION_ERROR, message="",
+                                        errors=["invalid username or challenge"]).to_dict())
             else:
-                self.send(StatusCode.AUTHENTICATION_ERROR, "Authentication failure", errors=["Invalid Credentials"])
+                self.send(**Message(status_code=StatusCode.AUTHENTICATION_ERROR, message="",
+                                    errors=["invalid format"]).to_dict())
         else:
-            error(message.errors)
+            error(msg.errors)
+
+    def handle_auth_user_key(self):
+        msg = self.read()
+        if len(msg.errors) == 0:
+            datas = msg.message
+            if isinstance(datas, dict) and "username" in datas and "password" in datas:
+                if self.auth_user_key(username=datas.get("username"), key=datas.get("password")):
+                    self.send(**Message(status_code=StatusCode.AUTHENTICATION_SUCCESS).to_dict())
+                else:
+                    self.send(**Message(status_code=StatusCode.AUTHENTICATION_ERROR,
+                                        errors=["invalid credentials or format"]).to_dict())
+            else:
+                self.send(**Message(status_code=StatusCode.AUTHENTICATION_ERROR,
+                                    errors=["invalid credentials or format"]).to_dict())
+        else:
+            error(msg.errors)
+
+    def auth_user_key(self, username: str, key: str):
+        try:
+            self.user = self.authenticator.authenticate_user(username, key,
+                                                             crypted_password=False if self.protocol == AuthenticationProtocol.PASSWORD else True)
+            self.authentication_state = AuthenticationState.AUTHENTICATED
+            return True
+        except AuthenticationError:
+            self.authentication_state = AuthenticationState.FAILURE
+            return False
+
+    def login(self):
+        msg = CommandMessage(f"{LOGIN} : {self.protocol}")
+        self.send(**msg.to_dict())
+        self.request_login_date = datetime.now()
+        self.authentication_state = AuthenticationState.PROCESSING_AUTHENTICATION
 
     def send(self, status_code: StatusCode, message, errors: list = []):
         status_code = status_code.value if isinstance(status_code, StatusCode) else status_code
@@ -153,7 +218,7 @@ class TcpClient(Client):
         except OSError:
             self.stop()
 
-    def read(self):
+    def __read(self):
         data = None
         while data is None:
             try:
@@ -162,17 +227,28 @@ class TcpClient(Client):
                 pass
         return data
 
-    def read_no_wait(self) -> str:
+    def __read_no_wait(self) -> str:
         data = self.connection.read().decode("utf-8")
         debug(f"read: {data}")
         return data
 
-    def read_message(self, no_wait: bool = False):
-        if no_wait:
-            data = self.read_no_wait()
-        else:
-            data = self.read()
-        message = Message(data)
+    def read(self, no_wait: bool = False, retry: int = MAX_RETRY) -> Message:
+        data = ''
+        counter = 0
+        while counter < retry:
+            if no_wait:
+                data += self.__read_no_wait()
+            else:
+                data += self.__read()
+            try:
+                res = json.loads(data)
+            except JSONDecodeError:
+                counter += 1
+                continue
+            if not isinstance(res, dict):
+                raise Exception()
+            else:
+                return Message(res)
 
     def write(self, s: (dict, str)):
         if isinstance(s, Message):
