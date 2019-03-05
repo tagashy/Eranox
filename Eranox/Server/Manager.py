@@ -4,7 +4,7 @@ from Eranox.Core import process_message
 from Eranox.Core.Command import CommandFactory
 from Eranox.Core.mythread import Thread
 from Eranox.Server.Actions.commands import get_parser_for_user
-from Eranox.Server.Protocol.SSL import SocketServer,AuthenticationState
+from Eranox.Server.Protocol.SSL import SocketServer, AuthenticationState
 from EranoxAuth import Authenticator, Engine, DefaultEngine, DEFAULT_ENGINE_PATH, Role
 
 
@@ -28,7 +28,7 @@ class Manager(Thread):
     def main(self):
         new_client = []
         for client in self.socket_server.clients:
-            if client.authentication_state== AuthenticationState.AUTHENTICATED:
+            if client.authentication_state == AuthenticationState.AUTHENTICATED:
                 try:
                     message = client.rcv_queue.get_nowait()
                     process_message(message, self.authenticator, client)
@@ -45,26 +45,12 @@ def print_message(msg):
 
 if __name__ == '__main__':
     manager = Manager({"bindaddr": "0.0.0.0"}, timing=10)
-    anon = manager.authenticator.create_user("ANONYMOUS", "", Role.ANONYMOUS)
-    taga = manager.authenticator.create_user("tagashy", "123456", Role.ROOT)
-    admin = manager.authenticator.create_user("admin", "admin", Role.ADMIN)
-    test = manager.authenticator.create_user("test", "test", Role.USER)
-    admin_grp = manager.authenticator.create_group("root")
-    users_grp = manager.authenticator.create_group("users")
-    manager.authenticator.add_user_to_group(user=admin, group=admin_grp)
-    manager.authenticator.add_user_to_group(user=anon, group=users_grp)
-    manager.authenticator.add_user_to_group(user=taga, group=users_grp)
-    manager.authenticator.add_user_to_group(user=admin, group=users_grp)
-    manager.authenticator.add_user_to_group(user=test, group=users_grp)
-    manager.authenticator.create_permission("register", group=users_grp)
-    manager.authenticator.create_permission("root", group=admin_grp)
-    parser = get_parser_for_user(admin, manager.authenticator)
-    parser = get_parser_for_user(test, manager.authenticator)
-
-    print(f"groups of user {anon}:{manager.authenticator.get_groups_of_user(anon)}")
-    print(f"groups of user {taga}:{manager.authenticator.get_groups_of_user(taga)}")
-    print(f"groups of user {admin}:{manager.authenticator.get_groups_of_user(admin)}")
-    print(f"groups of user {test}:{manager.authenticator.get_groups_of_user(test)}")
+    test=manager.authenticator.get_user("test")
+    msg, rnd = manager.authenticator.authenticate_challenge(0, server_hash=test.server_hash)
+    msg2, key = manager.authenticator.authenticate_challenge(1, username=test.name, challenge=msg)
+    msg3 = manager.authenticator.authenticate_challenge(2, decryption_key=rnd, password="test", challenge=msg2)
+    result = manager.authenticator.authenticate_challenge(3, username=test.name, challenge=msg3,key=key,crypted_password=False)
+    print(result)
     manager.start()
     import time
 

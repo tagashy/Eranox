@@ -20,7 +20,7 @@ class CommandMessage(Message):
         Message.__init__(self, status_code=StatusCode.COMMAND, message=command.to_dict(), errors=errors)
 
     @staticmethod
-    def from_message(message: Message) -> Message:
+    def from_message(message: Message):
         msg = CommandMessage(message.message.get("command"))
         msg.message["uuid"] = message.message.get("uuid")
         return msg
@@ -28,6 +28,10 @@ class CommandMessage(Message):
     @property
     def uuid(self):
         return self.message.get("uuid")
+
+    @property
+    def command(self):
+        return self.message.get("command")
 
 
 class CommandReplyMessage(Message):
@@ -44,6 +48,10 @@ class CommandReplyMessage(Message):
     @property
     def uuid(self):
         return self.message.get("uuid")
+
+    @property
+    def result(self):
+        return self.message.get("result")
 
 
 def NoneFunc(message):

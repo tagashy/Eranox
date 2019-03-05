@@ -1,18 +1,29 @@
-import json
+import re
 import socket
 import ssl
-from logging import error, debug
-from queue import Empty, Queue
+from logging import error
+from typing import Union
 
-from Eranox.Agent.Connections.Controller import Controller
+from Eranox.Core.AuthenticationProtocol import AuthenticationProtocol, DEFAULT_PROTOCOL
+from Eranox.Core.Command import CommandMessage, CommandReplyMessage
+from Eranox.Core.Network.SSL import SSL
 from Eranox.Core.mythread import Thread
 from Eranox.Core.Message import Message
+from Eranox.Core.utils import has_parameter
+from Eranox.constants import LOGIN
+from Eranox.constants import StatusCode
+from EranoxAuth.authenticate import Authenticator
 
 
-class SSLController(Controller, Thread):
+class SSLController(SSL, Thread):
     def __init__(self, hostname: str, port: int, certificate_path: str, username: str, password: str,
-                 server_hash: str = None, check_hostname: bool = True):
-        Controller.__init__(self, username, password, server_hash)
+                 authenticator: Authenticator,
+                 server_hash: str = None, check_hostname: bool = True,
+                 protocol: AuthenticationProtocol = DEFAULT_PROTOCOL):
+        self.authenticator = authenticator
+        self.__password = password
+        self.username = username
+        self.server_hash = server_hash
         Thread.__init__(self)
         self.hostname = hostname
         self.port = port
@@ -20,53 +31,84 @@ class SSLController(Controller, Thread):
         context.load_verify_locations(certificate_path)
         context.check_hostname = check_hostname
         self.context = context
-        self.read_queue = Queue()
-        self.sock = None
-        self.ssock = None
+        self.connection = None
+        self.protocol = protocol
+        self.sock = socket.create_connection((self.hostname, self.port))
+        ssock = self.context.wrap_socket(self.sock, server_hostname=self.hostname, )
+        SSL.__init__(self, ssock, self.protocol)
+        self.auth_version_regex = re.compile(f"{LOGIN} : (\S+)")
+
+    def check_protocol_version(self, msg: CommandMessage) -> Union[bool, None]:
+        if isinstance(msg.command, str):
+            res = self.auth_version_regex.search(msg.command)
+            if res is not None:
+                if self.protocol.value == res.group(1):
+                    return True
+                else:
+                    return False
+        return None
 
     def init(self):
-        self.sock = socket.create_connection((self.hostname, self.port))
-        self.ssock = self.context.wrap_socket(self.sock, server_hostname=self.hostname, )
-        self.ssock.setblocking(False)
+        stop = False
+        while not stop:
+            data = self.read()
+            msg = CommandMessage.from_message(data)
+            res = self.check_protocol_version(msg)
+            if res is True:
+                if not self.authenticate(msg):
+                    self.stop()
+                stop = True
 
-    def main(self):
-        try:
-            data = self.queue.get_nowait()
-            self.ssock.send(data)
-        except Empty:
-            try:
-                data = self.ssock.read()
-                if len(data) > 0:
-                    self.read_queue.put(data)
-            except ssl.SSLWantReadError:
+            elif res is False:
+                self.send_mismatch_version(msg)
+                stop = True
+                self.stop()
+            else:
                 pass
 
+
+
+    def send_mismatch_version(self, msg: CommandMessage):
+        self.send(**CommandReplyMessage(msg.uuid, "", errors=[
+            f"Version mismatch. Client only support auth protocol {self.protocol.value}"]).to_dict())
+
+    def handle_auth_user_key(self, msg: CommandMessage):
+        self.send(**CommandReplyMessage(msg.uuid, {"username": self.username, "password": self.__password}).to_dict())
+        msg = self.read()
+        if msg.status_code == StatusCode.AUTHENTICATION_SUCCESS:
+            return True
+        else:
+            error(msg.errors)
+            return False
+
+    def authenticate(self, msg: CommandMessage) -> bool:
+        if self.protocol == AuthenticationProtocol.PASSWORD or self.protocol == AuthenticationProtocol.SHARED_KEY_PASSWORD:
+            return self.handle_auth_user_key(msg)
+        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE:
+            return self.handle_auth_challenge(msg)
+
+    def handle_auth_challenge(self, msg: CommandMessage):
+        challenge,key = self.authenticator.authenticate_challenge(0,server_hash=self.server_hash)
+        self.send(**CommandReplyMessage(msg.uuid, {"username": self.username, "challenge": challenge.decode("utf-8")}).to_dict())
+        msg = self.read()
+        if len(msg.errors) == 0 and msg.status_code==StatusCode.AUTHENTICATION_CHALLENGE_STEP_2.value:
+            content=self.authenticator.authenticate_challenge(2,decryption_key=key, password=self.__password, challenge=msg.message)
+            msg=Message(status_code=StatusCode.AUTHENTICATION_CHALLENGE_STEP_2,message=content.decode("utf-8"),errors=[])
+            self.send(**msg.to_dict())
+            msg = self.read()
+            if msg.status_code == StatusCode.AUTHENTICATION_SUCCESS.value:
+                return True
+            else:
+                error(msg.errors)
+                return False
+        else:
+            error(msg.errors)
+
+
+
     def end(self):
-        self.ssock.close()
+        self.connection.close()
         self.sock.close()
-
-    def write(self, s: (dict, str)):
-        if isinstance(s, Message):
-            s = s.to_dict()
-        try:
-            debug(f"write: {s}")
-            res = json.dumps(s)
-            self.queue.put(res.encode("utf-8"))
-        except json.JSONDecodeError:
-            error(f"data to send are could not been dumped : {s}")
-
-    def read_no_wait(self):
-        try:
-            data = self.read_queue.get_nowait()
-            debug(f"read_no_wait: {data}")
-            return data
-        except Empty:
-            return None
-
-    def read(self):
-        data = self.read_queue.get()
-        debug(f"read: {data}")
-        return data
 
 
 if __name__ == '__main__':
@@ -75,4 +117,3 @@ if __name__ == '__main__':
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations('../../Server/data/certificate.crt')
     context.check_hostname = False
-

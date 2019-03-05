@@ -1,7 +1,7 @@
 from enum import Enum
 
 from Eranox.Core.mythread import Thread
-from EranoxAuth import  Authenticator
+from EranoxAuth import Authenticator
 
 
 class ClientRole(Enum):
@@ -27,6 +27,3 @@ class Client(Thread):
 
     def authenticate(self):
         pass
-
-    def execute_order(self, order):
-        raise NotImplementedError
