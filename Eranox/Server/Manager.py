@@ -34,15 +34,16 @@ class Manager(Thread):
             if client.authentication_state == AuthenticationState.AUTHENTICATED:
                 try:
                     message: Message = client.get_message()
-                    process_message(message, self, client)
+                    try:
+                        process_message(message, self, client)
+                    except Exception as e:
+                        client.send_message(InvalidMessage(message, errors=[e]))
                 except Empty:
                     if client.type == "ssl":
                         command = CommandFactory.create_command("monitor", print_message)
                         client.send_message(command)
                         command = CommandFactory.create_command("ping")
                         client.send_message(command)
-                except Exception as e:
-                    client.send_message(InvalidMessage(message))
 
     @property
     def clients(self):
@@ -65,7 +66,7 @@ def print_message(msg):
 
 
 if __name__ == '__main__':
-    manager = Manager({"bindaddr": "0.0.0.0"}, timing=10)
+    manager = Manager({"bindaddr": "0.0.0.0"},timing=10)
     test = manager.authenticator.get_user("test")
     msg, rnd = manager.authenticator.authenticate_challenge(0, server_hash=test.server_hash)
     msg2, key = manager.authenticator.authenticate_challenge(1, username=test.name, challenge=msg)

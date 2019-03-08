@@ -15,10 +15,8 @@ def process_message(msg: Message, manager, controller):
         logger.addHandler(logHandler)
         logger.setLevel(logging.ERROR)
         if controller.parser is None:
-            controller.set_parser()
+            controller.set_parser(logger)
         parser = controller.parser
-
-        parser.logger=logger
         msg = CommandMessage.from_message(msg)
         splitted = msg.message.get("command").split()
         try:
@@ -29,9 +27,8 @@ def process_message(msg: Message, manager, controller):
         if errors is None or len(errors) == 0:
             args.func(args, msg, controller, manager)
         else:
+            raise Exception(errors if isinstance(errors, list) else [errors])
             controller.write(CommandReplyMessage(msg.uuid, "", errors if isinstance(errors, list) else [errors]))
-        del logger
-        del stream
     elif msg.status_code == StatusCode.COMMAND_REPLY.value:
         msg = CommandReplyMessage.from_message(msg)
         try:

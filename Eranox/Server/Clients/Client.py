@@ -38,5 +38,5 @@ class Client(Thread):
     def authenticate(self):
         pass
 
-    def set_parser(self):
-        self.parser = get_parser_for_user(self.user, self.authenticator)
+    def set_parser(self,logger):
+        self.parser = get_parser_for_user(self.user, self.authenticator,logger)

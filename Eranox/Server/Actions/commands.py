@@ -29,8 +29,8 @@ class Action(object):
     def run(self, args, message: CommandMessage, controller, manager):
         controller.write("Catching empty run")
 
-    def add_to_parser(self, subparsers):
-        n_parser = subparsers.add_parser(*self.subparser_data["args"], **self.subparser_data["kwargs"], )
+    def add_to_parser(self, subparsers, logger):
+        n_parser = subparsers.add_parser(logger=logger, *self.subparser_data["args"], **self.subparser_data["kwargs"], )
         for argument in self.arguments:
             n_parser.add_argument(*argument["args"], **argument["kwargs"])
         n_parser.set_defaults(func=self)
@@ -200,11 +200,11 @@ class ArgparseLogger(argparse.ArgumentParser):
         self.logger.error(message)
 
 
-def get_parser_for_user(user, authenticator):
-    parser = ArgparseLogger()
+def get_parser_for_user(user, authenticator, logger):
+    parser = ArgparseLogger(logger)
     subparsers = parser.add_subparsers(help="commands", dest="command")
     for action in Actions:
         for permission in action.permissions:
             if authenticator.can_user_do(permission, user):
-                action().add_to_parser(subparsers)
+                action().add_to_parser(subparsers, logger)
     return parser
