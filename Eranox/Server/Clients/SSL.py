@@ -10,7 +10,7 @@ from Eranox.Core.Message import Message
 from Eranox.Core.Network.SSL import SSL
 from Eranox.Core.mythread import Thread
 from Eranox.Core.utils import has_parameter
-from Eranox.Server.Client import Client, AuthenticationState
+from Eranox.Server.Clients.Client import Client, AuthenticationState
 from Eranox.constants import StatusCode, LOGIN
 from EranoxAuth import Authenticator, AuthenticationError
 
@@ -44,6 +44,8 @@ class SocketServer(Thread):
 
 
 class TcpClient(Client, SSL, Thread):
+    type = "ssl"
+
     login_regex = re.compile(
         "{\s*[\"\']username[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*,\s*[\"\']password[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*}")
 
@@ -154,3 +156,10 @@ class TcpClient(Client, SSL, Thread):
         self.send(**msg.to_dict())
         self.request_login_date = datetime.now()
         self.authentication_state = AuthenticationState.PROCESSING_AUTHENTICATION
+
+
+    def get_message(self):
+        return self.rcv_queue.get_nowait()
+
+    def send_message(self,msg):
+        return self.send(**msg.to_dict())

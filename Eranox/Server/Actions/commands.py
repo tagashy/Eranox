@@ -1,9 +1,11 @@
 import argparse
 import keyword
+from pprint import pformat
 
 import psutil
 
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
+from Eranox.constants import ROOT, ADMIN
 
 
 def init_cmds(user, authenticator):
@@ -24,7 +26,7 @@ class Action(object):
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         controller.write("Catching empty run")
 
     def add_to_parser(self, subparsers):
@@ -35,12 +37,11 @@ class Action(object):
         keyword.kwlist.append(self.subparser_data["args"][0])
 
 
-
 class Pyexec(Action):
     subparser_data = {"args": ["pyexec"], "kwargs": {"help": "execute a python statement"}}
-    permissions = ["pyexec", "root"]
+    permissions = ["pyexec", ROOT]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         do the exec func of python (allow to exec code from stdin)
         :param args: the args object returned by parse_args
@@ -63,9 +64,9 @@ class Pyeval(Action):
     arguments = [
         {"args": ["statement"], "kwargs": {"help": "the statement to execute", "nargs": "+"}}
     ]
-    permissions = ["pyeval", "root"]
+    permissions = ["pyeval", ROOT]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         do the exec func of python (allow to exec code from stdin)
         :param args: the args object returned by parse_args
@@ -85,9 +86,9 @@ class Pyeval(Action):
 
 class Stop(Action):
     subparser_data = {"args": ["stop"], "kwargs": {"help": "stop cleanly the program"}}
-    permissions = ["stop", "root"]
+    permissions = ["stop", ROOT]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         exit investigation mode
         :param args: the args object returned by parse_args (unused)
@@ -102,7 +103,7 @@ class Ping(Action):
     subparser_data = {"args": ["ping"], "kwargs": {"help": "reply pong"}}
     permissions = ["ping"]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         return PONG
         :param args: the args object returned by parse_args (unused)
@@ -123,7 +124,7 @@ class Monitor(Action):
     subparser_data = {"args": ["monitor"], "kwargs": {"help": "return systems information"}}
     permissions = ["ping"]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         return systems information
         :param args: the args object returned by parse_args (unused)
@@ -150,7 +151,7 @@ class Register(Action):
                  {"args": ["-p", "--password"], "kwargs": {"help": "the password", "required": True}}]
     permissions = ["register"]
 
-    def run(self, args, message: CommandMessage, controller):
+    def run(self, args, message: CommandMessage, controller, manager):
         """
         return systems information
         :param args: the args object returned by parse_args (unused)
@@ -158,6 +159,7 @@ class Register(Action):
         :return: nothing
         """
         errors = []
+        res = ""
         try:
             user = controller.authenticator.create_user(args.user, args.password)
             res = user.get("server_hash")
@@ -166,11 +168,40 @@ class Register(Action):
         controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
 
 
-Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register]
+class ListClient(Action):
+    subparser_data = {"args": ["list_client"], "kwargs": {"help": "list client connected to the server="}}
+    permissions = [ADMIN, ROOT, "test"]
+
+    def run(self, args, message: CommandMessage, controller, manager):
+        """
+        return systems information
+        :param args: the args object returned by parse_args (unused)
+        :param controller: the controller object who called the function
+        :return: nothing
+        """
+        errors = []
+        res = ""
+        try:
+            res = pformat(manager.clients, 4)
+        except Exception as e:
+            errors.append(e)
+        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
+
+
+Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register, ListClient]
+
+
+class ArgparseLogger(argparse.ArgumentParser):
+    def __init__(self, logger=None, *args, **kwargs):
+        argparse.ArgumentParser.__init__(self, *args, **kwargs)
+        self.logger = logger
+
+    def error(self, message):
+        self.logger.error(message)
 
 
 def get_parser_for_user(user, authenticator):
-    parser = argparse.ArgumentParser()
+    parser = ArgparseLogger()
     subparsers = parser.add_subparsers(help="commands", dest="command")
     for action in Actions:
         for permission in action.permissions:
