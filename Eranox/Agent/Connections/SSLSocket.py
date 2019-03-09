@@ -6,13 +6,13 @@ from typing import Union
 
 from Eranox.Core.AuthenticationProtocol import AuthenticationProtocol, DEFAULT_PROTOCOL
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
+from Eranox.Core.Message import Message
 from Eranox.Core.Network.SSL import SSL
 from Eranox.Core.mythread import Thread
-from Eranox.Core.Message import Message
-from Eranox.Core.utils import has_parameter
 from Eranox.constants import LOGIN
 from Eranox.constants import StatusCode
 from EranoxAuth.authenticate import Authenticator
+from EranoxAuth.authenticate import encrypt
 
 
 class SSLController(SSL, Thread):
@@ -70,8 +70,6 @@ class SSLController(SSL, Thread):
             else:
                 pass
 
-
-
     def send_mismatch_version(self, msg: CommandMessage):
         self.send(**CommandReplyMessage(msg.uuid, "", errors=[
             f"Version mismatch. Client only support auth protocol {self.protocol.value}"]).to_dict())
@@ -88,17 +86,34 @@ class SSLController(SSL, Thread):
     def authenticate(self, msg: CommandMessage) -> bool:
         if self.protocol == AuthenticationProtocol.PASSWORD or self.protocol == AuthenticationProtocol.SHARED_KEY_PASSWORD:
             return self.handle_auth_user_key(msg)
-        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE:
+        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_KEEP_ENCRYPTED:
             return self.handle_auth_challenge(msg)
 
     def handle_auth_challenge(self, msg: CommandMessage):
-        challenge,key = self.authenticator.authenticate_challenge(0,server_hash=self.server_hash)
-        self.send(**CommandReplyMessage(msg.uuid, {"username": self.username, "challenge": challenge.decode("utf-8")}).to_dict())
+        enc_key=None
+        challenge, key = self.authenticator.authenticate_challenge(0, server_hash=self.server_hash)
+        self.send(**CommandReplyMessage(msg.uuid,
+                                        {"username": self.username, "challenge": challenge.decode("utf-8")}).to_dict())
         msg = self.read()
-        if len(msg.errors) == 0 and msg.status_code==StatusCode.AUTHENTICATION_CHALLENGE_STEP_2.value:
-            content=self.authenticator.authenticate_challenge(2,decryption_key=key, password=self.__password, challenge=msg.message)
-            msg=Message(status_code=StatusCode.AUTHENTICATION_CHALLENGE_STEP_2,message=content.decode("utf-8"),errors=[])
+        if len(msg.errors) == 0 and msg.status_code == StatusCode.AUTHENTICATION_CHALLENGE_STEP_2.value:
+            if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE:
+                password = encrypt(self.__password, self.server_hash)
+                content = self.authenticator.authenticate_challenge(2, decryption_key=key, password=password,
+                                                                    challenge=msg.message, keep_encrypt=False)
+
+            elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE:
+                password = self.__password
+                content = self.authenticator.authenticate_challenge(2, decryption_key=key, password=password,
+                                                                    challenge=msg.message, keep_encrypt=False)
+            else:
+                password = self.__password
+                content, enc_key = self.authenticator.authenticate_challenge(2, decryption_key=key, password=password,
+                                                                         challenge=msg.message, keep_encrypt=True)
+            msg = Message(status_code=StatusCode.AUTHENTICATION_CHALLENGE_STEP_2, message=content.decode("utf-8"),
+                          errors=[])
             self.send(**msg.to_dict())
+            self.enc_key = enc_key
+
             msg = self.read()
             if msg.status_code == StatusCode.AUTHENTICATION_SUCCESS.value:
                 return True
@@ -107,8 +122,6 @@ class SSLController(SSL, Thread):
                 return False
         else:
             error(msg.errors)
-
-
 
     def end(self):
         self.connection.close()

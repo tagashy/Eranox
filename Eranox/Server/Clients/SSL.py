@@ -50,7 +50,7 @@ class TcpClient(Client, SSL, Thread):
         "{\s*[\"\']username[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*,\s*[\"\']password[\"\']\s*:\s*[\"\'](\S+)[\"\']\s*}")
 
     def __init__(self, hostname, ip, connection: socket.socket, authenticator: Authenticator,
-                 banner_flag: str = "Welcome to Eranox server", protocol: AuthenticationProtocol = DEFAULT_PROTOCOL):
+                 protocol: AuthenticationProtocol = DEFAULT_PROTOCOL):
         Client.__init__(self, authenticator)
         SSL.__init__(self, connection, protocol)
         Thread.__init__(self)
@@ -86,7 +86,7 @@ class TcpClient(Client, SSL, Thread):
     def authenticate(self):
         if self.protocol == AuthenticationProtocol.PASSWORD or self.protocol == AuthenticationProtocol.SHARED_KEY_PASSWORD:
             self.handle_auth_user_key()
-        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE:
+        elif self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE or self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_KEEP_ENCRYPTED:
             self.handle_auth_challenge()
 
     def handle_auth_challenge(self):
@@ -103,13 +103,22 @@ class TcpClient(Client, SSL, Thread):
                         self.send(StatusCode.AUTHENTICATION_CHALLENGE_STEP_2, content.decode("utf-8"))
                         msg = self.read()
                         datas = msg.message
-                        user= self.authenticator.authenticate_challenge(stage=3, username=username,
-                                                                  challenge=datas, key=key,
-                                                                  crypted_password=True if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False)
+                        if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_KEEP_ENCRYPTED:
+                            user, enc_key = self.authenticator.authenticate_challenge(stage=3, username=username,
+                                                                                           challenge=datas, key=key,
+                                                                                           crypted_password=True if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False,
+                                                                                           keep_encrypt=True)
+                            self.enc_key=enc_key
+                        else:
+                            user = self.authenticator.authenticate_challenge(stage=3, username=username,
+                                                                             challenge=datas, key=key,
+                                                                             crypted_password=True if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False,
+                                                                             keep_encrypt=False)
                         if user is not None:
-                            self.user=user
+                            self.user = user
                             self.authentication_state = AuthenticationState.AUTHENTICATED
-                            self.send(**Message(status_code=StatusCode.AUTHENTICATION_SUCCESS,message="SUCESS",errors=[]).to_dict())
+                            self.send(**Message(status_code=StatusCode.AUTHENTICATION_SUCCESS, message="SUCESS",
+                                                errors=[]).to_dict())
 
                         else:
                             self.authentication_state = AuthenticationState.FAILURE
@@ -159,10 +168,8 @@ class TcpClient(Client, SSL, Thread):
         self.request_login_date = datetime.now()
         self.authentication_state = AuthenticationState.PROCESSING_AUTHENTICATION
 
-
     def get_message(self):
         return self.rcv_queue.get_nowait()
 
-    def send_message(self,msg):
+    def send_message(self, msg):
         return self.send(**msg.to_dict())
-

@@ -8,7 +8,7 @@ import ssl
 from json import JSONDecodeError
 from logging import debug, warning, error
 from queue import Empty
-
+from EranoxAuth.authenticate import encrypt, decrypt
 from Eranox.Core.AuthenticationProtocol import AuthenticationProtocol, DEFAULT_PROTOCOL
 from Eranox.Core.Message import Message
 from Eranox.Core.mythread import Thread
@@ -23,6 +23,7 @@ class SSL(Thread):
         self.rcv_queue = Queue()
         self.send_queue = Queue()
         self.protocol = protocol
+        self.enc_key = None
 
     def stop(self):
         self.connection.close()
@@ -46,19 +47,28 @@ class SSL(Thread):
             for i in range(len(errors)):
                 errors[i] = str(errors[i])
         try:
-            self.connection.send(json.dumps(message).encode("utf-8"))
+            if self.enc_key is None:
+                self.connection.send(json.dumps(message).encode("utf-8"))
+            else:
+                self.connection.send(encrypt(json.dumps(message), self.enc_key))
+
         except JSONDecodeError:
             warning(f"send message cannot be dumped !!! class= {message.__class__}")
             if isinstance(message, str):
-                self.connection.send(message.encode("utf-8"))
+                if self.enc_key is None:
+                    self.connection.send(message.encode("utf-8"))
+                else:
+                    self.connection.send(encrypt(message.encode("utf-8"), self.enc_key))
         except ssl.SSLWantWriteError:
             if counter < MAX_RETRY:
                 self.__send(message, counter + 1)
             else:
                 error(f"cannot send {message} because max retry on ssl.WantWrite")
         except ConnectionError as e:
+            error(e)
             self.stop()
         except OSError as e:
+            error(e)
             self.stop()
 
     def __read(self):
@@ -71,7 +81,11 @@ class SSL(Thread):
         return data
 
     def __read_no_wait(self) -> str:
-        data = self.connection.read().decode("utf-8")
+        data = self.connection.read()
+        data=data.decode("utf-8")
+        if self.enc_key is not None:
+            data = decrypt(data, self.enc_key).decode("utf-8")
+
         debug(f"read: {data}")
         return data
 

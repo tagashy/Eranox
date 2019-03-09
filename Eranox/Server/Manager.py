@@ -79,17 +79,11 @@ if __name__ == '__main__':
     manager = Manager({"bindaddr": "0.0.0.0"}, timing=10)
     test = manager.authenticator.get_user("test")
     admin = manager.authenticator.get_user("admin")
-    msg, rnd = manager.authenticator.authenticate_challenge(0, server_hash=test.server_hash)
-    msg2, key = manager.authenticator.authenticate_challenge(1, username=test.name, challenge=msg)
-    msg3 = manager.authenticator.authenticate_challenge(2, decryption_key=rnd, password="test", challenge=msg2)
-    result = manager.authenticator.authenticate_challenge(3, username=test.name, challenge=msg3, key=key,
-                                                          crypted_password=False)
     from Eranox.Cli.STDINServer import STDINClient
 
     manager.authenticator.create_permission("test", user=test)
     manager.authenticator.create_permission("admin", user=admin)
     stdin = STDINClient(manager.authenticator)
-    print(result)
     manager.start()
     manager.add_client(stdin)
     stdin.start()
