@@ -38,6 +38,10 @@ class SSLController(SSL, Thread):
         SSL.__init__(self, ssock, self.protocol)
         self.auth_version_regex = re.compile(f"{LOGIN} : (\S+)")
 
+    @property
+    def user(self):
+        return self.username
+
     def check_protocol_version(self, msg: CommandMessage) -> Union[bool, None]:
         if isinstance(msg.command, str):
             res = self.auth_version_regex.search(msg.command)

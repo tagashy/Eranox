@@ -1,5 +1,6 @@
 from queue import Empty
 from typing import List
+from typing import Union
 
 from Eranox.Core import process_message
 from Eranox.Core.Command import CommandFactory
@@ -35,7 +36,7 @@ class Manager(Thread):
                 try:
                     message: Message = client.get_message()
                     try:
-                        process_message(message, self, client)
+                        process_message(message, client, manager=self)
                     except Exception as e:
                         client.send_message(InvalidMessage(message, errors=[e]))
                 except Empty:
@@ -60,22 +61,33 @@ class Manager(Thread):
         else:
             raise TypeError(client)
 
+    def get_client(self, by, value) -> Union[Client, None]:
+        if by == "index" and isinstance(value, int) and len(self.clients) > value:
+            return self.clients[value]
+        else:
+            for client in self.clients:
+                if hasattr(client, by) and getattr(client, by) == value:
+                    return client
+        return None
+
 
 def print_message(msg):
     print(msg)
 
 
 if __name__ == '__main__':
-    manager = Manager({"bindaddr": "0.0.0.0"},timing=10)
+    manager = Manager({"bindaddr": "0.0.0.0"}, timing=10)
     test = manager.authenticator.get_user("test")
+    admin = manager.authenticator.get_user("admin")
     msg, rnd = manager.authenticator.authenticate_challenge(0, server_hash=test.server_hash)
     msg2, key = manager.authenticator.authenticate_challenge(1, username=test.name, challenge=msg)
     msg3 = manager.authenticator.authenticate_challenge(2, decryption_key=rnd, password="test", challenge=msg2)
     result = manager.authenticator.authenticate_challenge(3, username=test.name, challenge=msg3, key=key,
                                                           crypted_password=False)
-    from Eranox.Server.Clients.STDIN import STDINClient
+    from Eranox.Cli.STDINServer import STDINClient
 
-    manager.authenticator.create_permission("test", user=test )
+    manager.authenticator.create_permission("test", user=test)
+    manager.authenticator.create_permission("admin", user=admin)
     stdin = STDINClient(manager.authenticator)
     print(result)
     manager.start()
@@ -84,3 +96,4 @@ if __name__ == '__main__':
     import time
 
     time.sleep(10)
+    print(admin)

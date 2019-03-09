@@ -8,10 +8,10 @@ parser.add_argument("-v", "--verbose", help="set the logging to debug", default=
 subparsers = parser.add_subparsers(help='sub-command help', dest="action")
 server = subparsers.add_parser(SERVER_ACTION)
 server.add_argument("-c", "--config-file", default="config.yml")
-agent = subparsers.add_parser("agent")
+agent = subparsers.add_parser(AGENT_ACTION)
 agent.add_argument("-c", "--config-file", default="config.yml")
-
-cli = subparsers.add_parser("cli")
+cli = subparsers.add_parser(CLI_ACTION)
+cli.add_argument("-c", "--config-file", default="config.yml")
 args = parser.parse_args()
 if args.verbose:
     basicConfig(level=DEBUG)

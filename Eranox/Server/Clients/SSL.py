@@ -103,9 +103,11 @@ class TcpClient(Client, SSL, Thread):
                         self.send(StatusCode.AUTHENTICATION_CHALLENGE_STEP_2, content.decode("utf-8"))
                         msg = self.read()
                         datas = msg.message
-                        if self.authenticator.authenticate_challenge(stage=3, username=username,
+                        user= self.authenticator.authenticate_challenge(stage=3, username=username,
                                                                   challenge=datas, key=key,
-                                                                  crypted_password=True if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False):
+                                                                  crypted_password=True if self.protocol == AuthenticationProtocol.SHARED_KEY_BASED_CHALLENGE_DOUBLE else False)
+                        if user is not None:
+                            self.user=user
                             self.authentication_state = AuthenticationState.AUTHENTICATED
                             self.send(**Message(status_code=StatusCode.AUTHENTICATION_SUCCESS,message="SUCESS",errors=[]).to_dict())
 
@@ -163,3 +165,4 @@ class TcpClient(Client, SSL, Thread):
 
     def send_message(self,msg):
         return self.send(**msg.to_dict())
+

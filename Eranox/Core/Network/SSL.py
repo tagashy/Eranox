@@ -35,8 +35,16 @@ class SSL(Thread):
         self.__send(data)
 
     def __send(self, message: (dict, str), counter: int = 0):
-        if isinstance(message,bytes):
-            message=message.decode("utf-8")
+        if isinstance(message, bytes):
+            message = message.decode("utf-8")
+        elif isinstance(message, Message):
+            message = message.to_dict()
+        if isinstance(message, dict):
+            if isinstance(message.get("message"), Message):
+                message["message"] = message.get("message").to_dict()
+            errors = message.get("errors")
+            for i in range(len(errors)):
+                errors[i] = str(errors[i])
         try:
             self.connection.send(json.dumps(message).encode("utf-8"))
         except JSONDecodeError:
@@ -48,9 +56,9 @@ class SSL(Thread):
                 self.__send(message, counter + 1)
             else:
                 error(f"cannot send {message} because max retry on ssl.WantWrite")
-        except ConnectionError:
+        except ConnectionError as e:
             self.stop()
-        except OSError:
+        except OSError as e:
             self.stop()
 
     def __read(self):
@@ -106,7 +114,7 @@ class SSL(Thread):
                 self.send(**data.to_dict())
             elif isinstance(data, dict):
                 self.send(**data)
-            elif isinstance(data,bytes):
+            elif isinstance(data, bytes):
                 self.__send(data)
             else:
                 warning(f"Invalid message {data}")

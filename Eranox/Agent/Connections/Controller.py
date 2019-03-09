@@ -25,29 +25,6 @@ class Controller(object):
         pwd = encrypt(password, self.__encryption_key) if self.__encryption_key else password
         self.write(CommandReplyMessage(uuid=uuid, result={"username": username, "password": pwd}))
 
-    def login(self, uuid: str):
-        if self.auth_stage == 1:
-            self.write(CommandReplyMessage(uuid=uuid, result={"username": self.__username}))
-            self.auth_stage = 2
-        else:
-            self.write(
-                CommandReplyMessage(uuid=uuid, result=[], errors=["Login impossible a login is currently processed"]))
-            error("Login impossible a login is currently processed")
-
-    def login_stage2(self, msg: str):
-        if self.auth_stage == 2:
-            decrypted_msg = json.loads(decrypt(msg, self.__encryption_key))
-            content = encrypt(json.dumps({"password": self.__password}), decrypted_msg.get("challenge_key"))
-            self.write(CommandReplyMessage(uuid=decrypted_msg.get("uuid"), result=content))
-            self.auth_stage = 3
-        else:
-            self.write(
-                CommandReplyMessage(uuid="?", result=[], errors=["Login impossible a login is currently processed"]))
-            error("Login impossible a login is currently processed")
-    def login_stage3(self, msg: str):
-        if self.auth_stage == 3:
-            decrypted_msg = json.loads(decrypt(msg, self.__encryption_key))
-
 
     def register(self):
         user = f"automated_account_{os.urandom(16)}"

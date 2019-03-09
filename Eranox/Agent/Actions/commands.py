@@ -1,5 +1,6 @@
 import argparse
 import keyword
+import os
 
 import psutil
 
@@ -16,6 +17,7 @@ def init_cmds():
     Stop().add_to_parser(subparsers)
     Ping().add_to_parser(subparsers)
     Monitor().add_to_parser(subparsers)
+    System().add_to_parser(subparsers)
     return parser
 
 
@@ -39,18 +41,24 @@ class Action(object):
 
 class Login(Action):
     subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
+
     def run(self, args, message: CommandMessage, controller: Controller):
         controller.login(message.message.get("uuid"))
 
+
 class Login2(Action):
     subparser_data = {"args": ["LOGIN2"], "kwargs": {"help": "login the client"}}
+
     def run(self, args, message: CommandMessage, controller: Controller):
         controller.login_stage2(message.message)
 
+
 class Login3(Action):
     subparser_data = {"args": ["LOGIN3"], "kwargs": {"help": "login the client"}}
+
     def run(self, args, message: CommandMessage, controller: Controller):
         controller.login_stage3(message.message)
+
 
 class Pyexec(Action):
     subparser_data = {"args": ["pyexec"], "kwargs": {"help": "execute a python statement"}}
@@ -151,5 +159,29 @@ class Monitor(Action):
             res["virtual_memory"] = str(dict(psutil.virtual_memory()))
         except Exception as e:
             errors = [str(e)]
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        controller.write(msg)
+
+
+class System(Action):
+    subparser_data = {"args": ["system"], "kwargs": {"help": "execute system on a program"}}
+    arguments = [
+        {"args": ["statement"], "kwargs": {"help": "the statement to execute", "nargs": "+"}}
+    ]
+
+    def run(self, args, message: CommandMessage, controller: Controller):
+        """
+        do the exec func of python (allow to exec code from stdin)
+        :param args: the args object returned by parse_args
+        :param controller: the controller object who called the function (unused)
+        :return: None
+        """
+        query = " ".join(args.statement)
+        res = None
+        errors = []
+        try:
+            res = os.system(query)
+        except BaseException as e:
+            errors = [e]
         msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
         controller.write(msg)

@@ -3,20 +3,10 @@ import keyword
 from pprint import pformat
 
 import psutil
-
-from Eranox.Core.Command import CommandMessage, CommandReplyMessage
+from typing import Optional,IO
+from Eranox.Core.Command import CommandMessage, CommandReplyMessage, CommandFactory
+from Eranox.Core.Message import Message
 from Eranox.constants import ROOT, ADMIN
-
-
-def init_cmds(user, authenticator):
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help="commands", dest="command")
-    Pyexec().add_to_parser(subparsers)
-    Pyeval().add_to_parser(subparsers)
-    Stop().add_to_parser(subparsers)
-    Ping().add_to_parser(subparsers)
-    Monitor().add_to_parser(subparsers)
-    return parser
 
 
 class Action(object):
@@ -188,7 +178,45 @@ class ListClient(Action):
         controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
 
 
-Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register, ListClient]
+class SendCommandToClient(Action):
+    subparser_data = {"args": ["send_msg"], "kwargs": {"help": "send a message to another client"}}
+    arguments = [
+        {"args": ["-t", "--client"], "kwargs": {"help": "the client to send the message to", "required": True}},
+        {"args": ["-m", "--message"], "kwargs": {"help": "the password", "required": True}},
+        {"args": ["-c", "--command"],
+         "kwargs": {"help": "send the message as a command and redirect output to this session", "default": False,
+                    "action": "store_true"}},
+        {"args": ["-r", "--raw"], "kwargs": {"help": "send the message as it is", "default": False,
+                                             "action": "store_true"}},
+        {"args": ["-b", "--by"],
+         "kwargs": {"help": "change the search of client type (don't touch if you don't understand what you're doing)",
+                    "default": "name", }}
+
+    ]
+    permissions = [ADMIN, ROOT, "test"]
+
+    def run(self, args, message: CommandMessage, controller, manager):
+        """
+        return systems information
+        :param args: the args object returned by parse_args (unused)
+        :param controller: the controller object who called the function
+        :return: nothing
+        """
+        if args.command:
+            msg = CommandFactory.create_command(args.message, controller.write)
+        elif args.raw:
+            msg = args.message
+        else:
+            msg = Message()
+        client = manager.get_client(args.by, args.client)
+        if client is None:
+            controller.write(CommandReplyMessage(message.uuid, "invalid client", ["invalid client"]))
+        else:
+            client.send_message(msg)
+            controller.write(CommandReplyMessage(message.uuid, "msg send"))
+
+
+Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register, ListClient, SendCommandToClient]
 
 
 class ArgparseLogger(argparse.ArgumentParser):
@@ -199,10 +227,15 @@ class ArgparseLogger(argparse.ArgumentParser):
     def error(self, message):
         self.logger.error(message)
 
+    def _print_message(self, message: str, file: Optional[IO[str]] = ...):
+        self.logger.error(message)
+
 
 def get_parser_for_user(user, authenticator, logger):
     parser = ArgparseLogger(logger)
     subparsers = parser.add_subparsers(help="commands", dest="command")
+    if user is None:
+        raise Exception("user is None")
     for action in Actions:
         for permission in action.permissions:
             if authenticator.can_user_do(permission, user):
