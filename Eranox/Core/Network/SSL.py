@@ -46,11 +46,20 @@ class SSL(Thread):
             errors = message.get("errors")
             for i in range(len(errors)):
                 errors[i] = str(errors[i])
+
         try:
             if self.enc_key is None:
                 self.connection.send(json.dumps(message).encode("utf-8"))
             else:
-                self.connection.send(encrypt(json.dumps(message), self.enc_key))
+                content = json.dumps(message)
+                packet_size = 750
+                for i in range(0, len(content), packet_size):
+                    if i + packet_size > len(content):
+                        self.connection.send(encrypt(content[i:], self.enc_key))
+                    else:
+                        self.connection.send(encrypt(content[i:i + packet_size], self.enc_key))
+
+
 
         except JSONDecodeError:
             warning(f"send message cannot be dumped !!! class= {message.__class__}")
@@ -71,7 +80,7 @@ class SSL(Thread):
             error(e)
             self.stop()
 
-    def __read(self):
+    def __read(self) -> bytes:
         data = None
         while data is None:
             try:
@@ -80,17 +89,16 @@ class SSL(Thread):
                 pass
         return data
 
-    def __read_no_wait(self) -> str:
+    def __read_no_wait(self) -> bytes:
         data = self.connection.read()
-        data=data.decode("utf-8")
         if self.enc_key is not None:
-            data = decrypt(data, self.enc_key).decode("utf-8")
+            data = decrypt(data, self.enc_key)
 
         debug(f"read: {data}")
         return data
 
     def read(self, no_wait: bool = False, retry: int = MAX_RETRY) -> Message:
-        data = ''
+        data = b''
         counter = 0
         while counter < retry:
             if no_wait:
@@ -98,7 +106,7 @@ class SSL(Thread):
             else:
                 data += self.__read()
             try:
-                res = json.loads(data)
+                res = json.loads(data.decode("utf-8"))
             except JSONDecodeError:
                 counter += 1
                 continue

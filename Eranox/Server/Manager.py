@@ -40,7 +40,7 @@ class Manager(Thread):
                     except Exception as e:
                         client.send_message(InvalidMessage(message, errors=[e]))
                 except Empty:
-                    if client.type == "ssl":
+                    if client.type == "ssl2":
                         command = CommandFactory.create_command("monitor", print_message)
                         client.send_message(command)
                         command = CommandFactory.create_command("ping")
@@ -49,8 +49,14 @@ class Manager(Thread):
     @property
     def clients(self):
         clients: List[Client] = []
+        srv_client = []
         for client in self.socket_server.clients:
-            clients.append(client)
+            if not client.connection._closed:
+                srv_client.append(client)
+                clients.append(client)
+            else:
+                del client
+        self.socket_server.clients = srv_client
         for client in self.other_clients:
             clients.append(client)
         return clients
@@ -76,7 +82,7 @@ def print_message(msg):
 
 
 if __name__ == '__main__':
-    manager = Manager({"bindaddr": "0.0.0.0"}, timing=10)
+    manager = Manager({"bindaddr": "0.0.0.0"})#, timing=10)
     test = manager.authenticator.get_user("test")
     admin = manager.authenticator.get_user("admin")
     from Eranox.Cli.STDINServer import STDINClient

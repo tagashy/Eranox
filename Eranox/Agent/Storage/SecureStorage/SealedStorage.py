@@ -6,7 +6,7 @@ from Eranox.Agent.Storage.SecureStorage.SecureStorage import SecureStorage as St
 
 class SealedStorage(Storage):
     def __init__(self, path,masterkey, mastertable_path: str = SECURE_STORAGE_MASTERTABLE_PATH):
-        self.path = path
+        self.path = os.path.abspath(path)
         if not os.path.isdir(self.path):
             os.makedirs(self.path)
         super().__init__(masterkey, mastertable_path)

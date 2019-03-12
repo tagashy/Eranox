@@ -1,11 +1,12 @@
 import logging
 from io import StringIO
 from logging import error
+from shlex import split
 
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage, CommandFactory
 from Eranox.Core.Message import Message
 from Eranox.constants import StatusCode
-from shlex import split
+
 
 def process_message(msg: Message, controller, **kwargs):
     if msg.status_code == StatusCode.COMMAND.value:
@@ -22,7 +23,11 @@ def process_message(msg: Message, controller, **kwargs):
                     print("controllers hqs no set_parser")
             parser = controller.parser
         else:
-            parser = kwargs.get("parser")
+            if "init_cmds" in kwargs:
+                parser = kwargs.get("init_cmds")(logger)
+            else:
+                parser = kwargs.get("parser")
+                parser.logger = logger
         msg = CommandMessage.from_message(msg)
         try:
             args = parser.parse_args(split(msg.message.get("command")))
@@ -38,13 +43,13 @@ def process_message(msg: Message, controller, **kwargs):
             else:
                 args.func(args, msg, controller)
         else:
-            raise Exception(errors)
-            controller.write(CommandReplyMessage(msg.uuid, "", errors if isinstance(errors, list) else [errors]))
+            controller.write(CommandReplyMessage(msg.uuid, "", errors=errors if isinstance(errors, list) else [errors]))
     elif msg.status_code == StatusCode.COMMAND_REPLY.value:
         msg = CommandReplyMessage.from_message(msg)
         try:
             CommandFactory.mapping[msg.uuid](msg)
-            del CommandFactory.mapping[msg.uuid]
+            if msg.complete:
+                del CommandFactory.mapping[msg.uuid]
         except Exception as e:
             error(e)
     elif msg.status_code == StatusCode.INVALID_MESSAGE.value:

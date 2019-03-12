@@ -45,7 +45,7 @@ class Pyexec(Action):
             res = exec(query)
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -70,7 +70,7 @@ class Pyeval(Action):
             res = eval(query)
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -106,7 +106,7 @@ class Ping(Action):
             res = "PONG"
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -131,7 +131,7 @@ class Monitor(Action):
             res["virtual_memory"] = str(dict(psutil.virtual_memory()))
         except Exception as e:
             errors = [str(e)]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -155,7 +155,7 @@ class Register(Action):
             res = user.get("server_hash")
         except Exception as e:
             errors.append(e)
-        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
+        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors=errors))
 
 
 class ListClient(Action):
@@ -175,7 +175,7 @@ class ListClient(Action):
             res = pformat(manager.clients, 4)
         except Exception as e:
             errors.append(e)
-        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors))
+        controller.write(CommandReplyMessage(message.message.get("uuid"), res, errors=errors))
 
 
 class SendCommandToClient(Action):
@@ -210,7 +210,7 @@ class SendCommandToClient(Action):
             msg = Message()
         client = manager.get_client(args.by, args.client)
         if client is None:
-            controller.write(CommandReplyMessage(message.uuid, "invalid client", ["invalid client"]))
+            controller.write(CommandReplyMessage(message.uuid, "invalid client", errors=["invalid client"]))
         else:
             client.send_message(msg)
             controller.write(CommandReplyMessage(message.uuid, "msg send"))

@@ -1,7 +1,8 @@
+import base64
 from uuid import uuid4
 
 from Eranox.Core.Message import Message
-from Eranox.constants import STATUS_CODE, MESSAGE, ERRORS, COMMAND, RESULT, UUID
+from Eranox.constants import STATUS_CODE, MESSAGE, ERRORS, COMMAND, RESULT, UUID, COMPLETE, B64_ENCODED
 from Eranox.constants import StatusCode
 
 
@@ -40,14 +41,22 @@ class CommandMessage(Message):
 
 
 class CommandReplyMessage(Message):
-    def __init__(self, uuid: str, result: (dict, str), errors: list = []):
-        Message.__init__(self, status_code=StatusCode.COMMAND_REPLY, message={UUID: uuid, RESULT: result},
+    def __init__(self, uuid: str, result: (dict, str, bytes), complete: bool = True, errors: list = [],
+                 b64_encode: bool = None):
+        if b64_encode is None:
+            b64_encode = False if not isinstance(result, bytes) else True
+            result = result if not b64_encode else base64.b64encode(result)
+        elif b64_encode and isinstance(result, str):
+            result=result.encode("utf-8")
+        Message.__init__(self, status_code=StatusCode.COMMAND_REPLY,
+                         message={UUID: uuid, RESULT: result, COMPLETE: complete, B64_ENCODED: b64_encode},
                          errors=errors)
 
     @staticmethod
     def from_message(message: Message) -> Message:
-        msg = CommandReplyMessage(message.message.get(UUID), message.message.get(RESULT), message.errors)
-        msg.message[UUID] = message.message.get(UUID)
+        msg = CommandReplyMessage(message.message.get(UUID), message.message.get(RESULT),
+                                  message.message.get(COMPLETE, True), message.errors,
+                                  b64_encode=message.message.get(B64_ENCODED))
         return msg
 
     @property
@@ -56,11 +65,25 @@ class CommandReplyMessage(Message):
 
     @property
     def result(self):
-        return self.message.get(RESULT)
+        return self.message.get(RESULT) if not self.b64_encoded else base64.b64decode(            self.message.get(RESULT))
+
+    @property
+    def __result(self):
+        return self.message.get(RESULT) if not self.b64_encoded else self.message.get(RESULT).decode("utf-8")
+
+    @property
+    def complete(self):
+        return self.message.get(COMPLETE)
+
+    @property
+    def b64_encoded(self):
+        return self.message.get(B64_ENCODED, False)
 
     def to_dict(self, human_readable: bool = False):
         return {STATUS_CODE: self.status_code_obj if human_readable else self.status_code,
-                MESSAGE: {UUID: self.uuid, RESULT: self.result}, ERRORS: self.errors}
+                MESSAGE: {UUID: self.uuid, RESULT: self.result if human_readable else self.__result, COMPLETE: self.complete,
+                          B64_ENCODED: self.b64_encoded},
+                ERRORS: self.errors}
 
 
 def NoneFunc(message) -> None:

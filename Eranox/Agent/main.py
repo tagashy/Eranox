@@ -3,13 +3,15 @@ from logging import debug, error
 
 from ruamel.yaml import YAML
 from EranoxAuth.authenticate import Authenticator
-from Eranox.Agent.Actions.commands import init_cmds
+from Eranox.Agent.Actions import init_cmds
 from Eranox.Agent.Connections.SSLSocket import SSLController
 from Eranox.Core.Command import CommandMessage
 from Eranox.Core.Command import CommandReplyMessage, CommandFactory
 from Eranox.Core.Message import Message
 from Eranox.constants import StatusCode
-
+from Eranox.Core import process_message
+from io import StringIO
+import logging
 yaml = YAML(typ="safe")
 
 
@@ -25,25 +27,18 @@ def Core(args):
     port = data.get("port", 8443)
     ssl = SSLController(server_addr, port, cert_path, username, password,auth, server_hash, check_hostname=False)
     ssl.start()
-    parser = init_cmds()
+    stream = StringIO()
+    logHandler = logging.StreamHandler(stream, )
+    logger = logging.getLogger(f"agent")
+    logger.addHandler(logHandler)
+    logger.setLevel(logging.ERROR)
+    parser = init_cmds(logger)
     while True:
         message = ssl.get_data()
         if message is not None:
-            process_message(message, parser, ssl)
+            process_message(message, parser=parser, controller=ssl,init_cmd=init_cmds)
 
 
-def process_message(msg: Message, parser, controller):
-    if msg.status_code == StatusCode.COMMAND.value:
-        msg = CommandMessage.from_message(msg)
-        args = parser.parse_args(msg.message.get("command").split())
-        args.func(args, msg, controller)
-    elif msg.status_code == StatusCode.COMMAND_REPLY.value:
-        msg = CommandReplyMessage.from_message(msg)
-        try:
-            CommandFactory.mapping[msg.uuid](msg)
-            del CommandFactory.mapping[msg.uuid]
-        except Exception as e:
-            error(e)
 
 
 

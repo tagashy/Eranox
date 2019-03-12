@@ -1,4 +1,3 @@
-import argparse
 import keyword
 import os
 
@@ -6,19 +5,6 @@ import psutil
 
 from Eranox.Agent.Connections.Controller import Controller
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage
-
-
-def init_cmds():
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help="commands", dest="command")
-    Login().add_to_parser(subparsers)
-    Pyexec().add_to_parser(subparsers)
-    Pyeval().add_to_parser(subparsers)
-    Stop().add_to_parser(subparsers)
-    Ping().add_to_parser(subparsers)
-    Monitor().add_to_parser(subparsers)
-    System().add_to_parser(subparsers)
-    return parser
 
 
 class Action(object):
@@ -31,33 +17,13 @@ class Action(object):
     def run(self, args, message: CommandMessage, controller: Controller):
         controller.write("Catching empty run")
 
-    def add_to_parser(self, subparsers):
-        n_parser = subparsers.add_parser(*self.subparser_data["args"], **self.subparser_data["kwargs"], )
+    def add_to_parser(self, subparsers,logger):
+        n_parser = subparsers.add_parser(logger=logger,*self.subparser_data["args"], **self.subparser_data["kwargs"], )
         for argument in self.arguments:
             n_parser.add_argument(*argument["args"], **argument["kwargs"])
         n_parser.set_defaults(func=self)
         keyword.kwlist.append(self.subparser_data["args"][0])
 
-
-class Login(Action):
-    subparser_data = {"args": ["LOGIN"], "kwargs": {"help": "login the client"}}
-
-    def run(self, args, message: CommandMessage, controller: Controller):
-        controller.login(message.message.get("uuid"))
-
-
-class Login2(Action):
-    subparser_data = {"args": ["LOGIN2"], "kwargs": {"help": "login the client"}}
-
-    def run(self, args, message: CommandMessage, controller: Controller):
-        controller.login_stage2(message.message)
-
-
-class Login3(Action):
-    subparser_data = {"args": ["LOGIN3"], "kwargs": {"help": "login the client"}}
-
-    def run(self, args, message: CommandMessage, controller: Controller):
-        controller.login_stage3(message.message)
 
 
 class Pyexec(Action):
@@ -77,7 +43,7 @@ class Pyexec(Action):
             res = exec(query)
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -101,7 +67,7 @@ class Pyeval(Action):
             res = eval(query)
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -135,7 +101,7 @@ class Ping(Action):
             res = "PONG"
         except Exception as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -159,7 +125,7 @@ class Monitor(Action):
             res["virtual_memory"] = str(dict(psutil.virtual_memory()))
         except Exception as e:
             errors = [str(e)]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
 
 
@@ -183,5 +149,7 @@ class System(Action):
             res = os.system(query)
         except BaseException as e:
             errors = [e]
-        msg = CommandReplyMessage(message.message.get("uuid"), res, errors)
+        msg = CommandReplyMessage(message.message.get("uuid"), res, errors=errors)
         controller.write(msg)
+
+

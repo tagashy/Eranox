@@ -1,12 +1,12 @@
 import os
 from typing import Union, Optional
 
-from Eranox.Agent.Storage import Storage
+from Eranox.Agent.Storage.Storage import Storage
 
 
 class SealedStorage(Storage):
     def __init__(self, path):
-        self.path = path
+        self.path = os.path.abspath(path)
         if not os.path.isdir(self.path):
             os.makedirs(self.path)
 

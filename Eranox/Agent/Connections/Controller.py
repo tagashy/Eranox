@@ -12,6 +12,7 @@ class Controller(object):
         self.__password = password
         self.__encryption_key = encryption_key
         self.auth_stage = 1
+        self.parser=None
 
     def write(self, s: (dict, str)):
         debug(f"Base controller write called from {self}")
