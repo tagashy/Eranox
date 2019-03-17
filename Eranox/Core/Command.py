@@ -47,7 +47,7 @@ class CommandReplyMessage(Message):
             b64_encode = False if not isinstance(result, bytes) else True
             result = result if not b64_encode else base64.b64encode(result)
         elif b64_encode and isinstance(result, str):
-            result=result.encode("utf-8")
+            result = result.encode("utf-8")
         Message.__init__(self, status_code=StatusCode.COMMAND_REPLY,
                          message={UUID: uuid, RESULT: result, COMPLETE: complete, B64_ENCODED: b64_encode},
                          errors=errors)
@@ -65,7 +65,7 @@ class CommandReplyMessage(Message):
 
     @property
     def result(self):
-        return self.message.get(RESULT) if not self.b64_encoded else base64.b64decode(            self.message.get(RESULT))
+        return self.message.get(RESULT) if not self.b64_encoded else base64.b64decode(self.message.get(RESULT))
 
     @property
     def __result(self):
@@ -81,7 +81,8 @@ class CommandReplyMessage(Message):
 
     def to_dict(self, human_readable: bool = False):
         return {STATUS_CODE: self.status_code_obj if human_readable else self.status_code,
-                MESSAGE: {UUID: self.uuid, RESULT: self.result if human_readable else self.__result, COMPLETE: self.complete,
+                MESSAGE: {UUID: self.uuid, RESULT: self.result if human_readable else self.__result,
+                          COMPLETE: self.complete,
                           B64_ENCODED: self.b64_encoded},
                 ERRORS: self.errors}
 
@@ -94,7 +95,10 @@ class CommandFactory(object):
     mapping = {}
 
     @staticmethod
-    def create_command(command: str, return_func=NoneFunc, uuid: str = None):
+    def create_command(command: str, return_func=None, uuid: str = None, args: list = [], kwargs: dict = {}):
+        if return_func is None:
+            return_func = NoneFunc
         msg = CommandMessage(command)
-        CommandFactory.mapping[str(msg.uuid) if uuid is None else uuid] = return_func
+        CommandFactory.mapping[str(msg.uuid) if uuid is None else uuid] = {"func": return_func, "args": args,
+                                                                           "kwargs": kwargs}
         return msg

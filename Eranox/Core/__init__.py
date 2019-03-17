@@ -47,7 +47,8 @@ def process_message(msg: Message, controller, **kwargs):
     elif msg.status_code == StatusCode.COMMAND_REPLY.value:
         msg = CommandReplyMessage.from_message(msg)
         try:
-            CommandFactory.mapping[msg.uuid](msg)
+            cmd = CommandFactory.mapping[msg.uuid]
+            cmd.get('func')(*cmd.get("args", []), msg=msg, **cmd.get("kwargs", {}))
             if msg.complete:
                 del CommandFactory.mapping[msg.uuid]
         except Exception as e:

@@ -1,9 +1,10 @@
 import argparse
 import keyword
 from pprint import pformat
+from typing import Optional, IO
 
 import psutil
-from typing import Optional,IO
+
 from Eranox.Core.Command import CommandMessage, CommandReplyMessage, CommandFactory
 from Eranox.Core.Message import Message
 from Eranox.constants import ROOT, ADMIN
@@ -181,19 +182,22 @@ class ListClient(Action):
 class SendCommandToClient(Action):
     subparser_data = {"args": ["send_msg"], "kwargs": {"help": "send a message to another client"}}
     arguments = [
-        {"args": ["-t", "--client"], "kwargs": {"help": "the client to send the message to", "required": True}},
         {"args": ["-m", "--message"], "kwargs": {"help": "the password", "required": True}},
+        {"args": ["-t", "--targets"],
+         "kwargs": {"help": "the client to send the message to", "default": [], "nargs": "+"}},
+        {"args": ["-b", "--broadcast"],
+         "kwargs": {"help": "the client to send all client", "default": False, "action": "store_true"}},
         {"args": ["-c", "--command"],
          "kwargs": {"help": "send the message as a command and redirect output to this session", "default": False,
                     "action": "store_true"}},
         {"args": ["-r", "--raw"], "kwargs": {"help": "send the message as it is", "default": False,
                                              "action": "store_true"}},
-        {"args": ["-b", "--by"],
+        {"args": ["-B", "--by"],
          "kwargs": {"help": "change the search of client type (don't touch if you don't understand what you're doing)",
                     "default": "name", }}
 
     ]
-    permissions = [ADMIN, ROOT, "test"]
+    permissions = [ADMIN, ROOT, "test", "scheduler"]
 
     def run(self, args, message: CommandMessage, controller, manager):
         """
@@ -208,12 +212,23 @@ class SendCommandToClient(Action):
             msg = args.message
         else:
             msg = Message()
-        client = manager.get_client(args.by, args.client)
-        if client is None:
-            controller.write(CommandReplyMessage(message.uuid, "invalid client", errors=["invalid client"]))
+        if args.broadcast:
+            clients = manager.clients
+        elif len(args.targets) > 0:
+            clients = []
+            for client in args.targets:
+                clients.append(manager.get_client(args.by, client))
         else:
-            client.send_message(msg)
-            controller.write(CommandReplyMessage(message.uuid, "msg send"))
+            controller.write(CommandReplyMessage(message.uuid, "no targets specified", errors=["invalid targets"]))
+            return
+
+        if len(clients) < 1:
+            controller.write(CommandReplyMessage(message.uuid, "no clients found", errors=["invalid targets"]))
+        else:
+            for client in clients:
+                client.send_message(msg)
+                controller.write(CommandReplyMessage(message.uuid, {client: msg.uuid}, False))
+            controller.write(CommandReplyMessage(message.uuid, f"all message are send"))
 
 
 Actions = [Pyexec, Pyeval, Stop, Ping, Monitor, Register, ListClient, SendCommandToClient]

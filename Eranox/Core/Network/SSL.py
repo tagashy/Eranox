@@ -27,7 +27,7 @@ class SSL(Thread):
 
     def stop(self):
         self.connection.close()
-        exit(1)
+        Thread.stop(self)
 
     def send(self, status_code: StatusCode, message, errors: list = []):
         status_code = status_code.value if isinstance(status_code, StatusCode) else status_code
@@ -149,6 +149,15 @@ class SSL(Thread):
                 pass
             except ssl.SSLError as e:
                 error(e)
+            except ConnectionResetError as e:
+                self.stop()
+                error(e)
+            except ConnectionAbortedError as e:
+                self.stop()
+                error(e)
             except socket.error as e:
+                self.stop()
+                error(e)
+            except ValueError as e:
                 self.stop()
                 error(e)

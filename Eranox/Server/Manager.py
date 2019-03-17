@@ -17,7 +17,7 @@ class Manager(Thread):
         Thread.__init__(self, *args, **kwargs)
         cert_path = config.get("cert_path", "data/certificate.crt")
         private_key_path = config.get("private_key_path", "data/privatekey.key")
-        bindaddr: str = config.get("bindaddr", "127.0.0.1")
+        bindaddr: str = config.get("bind_addr", "127.0.0.1")
         port: int = config.get("port", 8443)
         auth = authenticator(engine)
         self.authenticator = auth
@@ -40,6 +40,10 @@ class Manager(Thread):
                     except Exception as e:
                         client.send_message(InvalidMessage(message, errors=[e]))
                 except Empty:
+                    try:
+                        msg=self.queue.get_nowait()
+                    except Empty:
+                        pass
                     if client.type == "ssl2":
                         command = CommandFactory.create_command("monitor", print_message)
                         client.send_message(command)
@@ -85,10 +89,13 @@ if __name__ == '__main__':
     manager = Manager({"bindaddr": "0.0.0.0"})#, timing=10)
     test = manager.authenticator.get_user("test")
     admin = manager.authenticator.get_user("admin")
+    manager.authenticator.create_user("scheduler")
+    scheduler = manager.authenticator.get_user("scheduler")
     from Eranox.Cli.STDINServer import STDINClient
 
     manager.authenticator.create_permission("test", user=test)
     manager.authenticator.create_permission("admin", user=admin)
+    manager.authenticator.create_permission("scheduler", user=scheduler)
     stdin = STDINClient(manager.authenticator)
     manager.start()
     manager.add_client(stdin)
