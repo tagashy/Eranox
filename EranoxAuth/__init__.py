@@ -3,3 +3,4 @@ from EranoxAuth.Engine import DefaultEngine
 from EranoxAuth.Classobject import Role
 
 
+DEFAULT_ENGINE_PATH="sqlite:///eranox.db"

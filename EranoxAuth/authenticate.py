@@ -102,6 +102,8 @@ class Authenticator(object):
             except sqlalchemy.exc.OperationalError as e:
                 error(f"authenticate_user exception {e}")
                 raise InvalidUsername()
+            if user is None:
+                raise InvalidUsername()
             key = decrypt(challenge, user.server_hash)
             rnd = get_random_number()
             return encrypt(rnd, key), rnd
@@ -187,7 +189,7 @@ class Authenticator(object):
             user.hash = None
             raise InvalidPassword()
 
-    def create_user(self, username: str, password: str, role: Role = Role.USER) -> dict:
+    def create_user(self, username: str, password: str=None, role: Role = Role.USER) -> dict:
         """
         create a user in db
         :param username: the username of the user
@@ -201,12 +203,17 @@ class Authenticator(object):
         except sqlalchemy.exc.OperationalError as e:
             error(f"create_user exception {e}")
             raise InvalidUsername()
-        user_hash = bcrypt.hashpw(get_hash(password), bcrypt.gensalt())
-        server_hash = bcrypt.hashpw(user_hash, bcrypt.gensalt())
-        user = User(name=username, user_hash=user_hash, server_hash=server_hash, role=role)
-        session.add(user)
-        session.commit()
-        return user.to_dict()
+        if user is not None:
+            raise InvalidUsername("already taken")
+        else:
+            if password is None:
+                password=base64.b64encode(get_random_number())
+            user_hash = bcrypt.hashpw(get_hash(password), bcrypt.gensalt())
+            server_hash = bcrypt.hashpw(user_hash, bcrypt.gensalt())
+            user = User(name=username, user_hash=user_hash, server_hash=server_hash, role=role)
+            session.add(user)
+            session.commit()
+            return user.to_dict()
 
     def get_user(self, user: (User, str, int, dict)) -> User:
         """
